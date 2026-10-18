@@ -118,53 +118,60 @@ func randomHex(n int) string {
 
 var fileName = regexp.MustCompile(`^(\d+)_([a-z0-9_]+)\.(up|down)\.sql$`)
 
+// migration is one version of a source: its name and its two files.
+type migration struct {
+	name     string
+	up, down string
+}
+
 // Validate checks the files of a migration source by the service runner's rules: every SQL
 // name matches NNN_name.(up|down).sql, every version has one up and one down file, and a
 // version number belongs to one name. Non-SQL files (embed.go) are ignored.
 func Validate(fsys fs.FS) error {
+	_, err := migrations(fsys)
+	return err
+}
+
+func migrations(fsys fs.FS) (map[uint64]*migration, error) {
 	entries, err := fs.ReadDir(fsys, ".")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	type pair struct {
-		name     string
-		up, down bool
-	}
-	versions := map[uint64]*pair{}
+	versions := map[uint64]*migration{}
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
 			continue
 		}
 		m := fileName.FindStringSubmatch(e.Name())
 		if m == nil {
-			return fmt.Errorf("%q does not match NNN_name.up.sql / NNN_name.down.sql", e.Name())
+			return nil, fmt.Errorf("%q does not match NNN_name.up.sql / NNN_name.down.sql", e.Name())
 		}
 		v, err := strconv.ParseUint(m[1], 10, 64)
 		if err != nil {
-			return fmt.Errorf("%q: version: %w", e.Name(), err)
+			return nil, fmt.Errorf("%q: version: %w", e.Name(), err)
 		}
-		p := versions[v]
-		if p == nil {
-			p = &pair{name: m[2]}
-			versions[v] = p
-		} else if p.name != m[2] {
-			return fmt.Errorf("version %d is used by %q and %q", v, p.name, m[2])
+		mg := versions[v]
+		if mg == nil {
+			mg = &migration{name: m[2]}
+			versions[v] = mg
+		} else if mg.name != m[2] {
+			return nil, fmt.Errorf("version %d is used by %q and %q", v, mg.name, m[2])
 		}
 		if m[3] == "up" {
-			p.up = true
+			mg.up = e.Name()
 		} else {
-			p.down = true
+			mg.down = e.Name()
 		}
 	}
-	for v, p := range versions {
-		if !p.up {
-			return fmt.Errorf("version %d (%s) has no up file", v, p.name)
+	for v, mg := range versions {
+		if mg.up == "" {
+			return nil, fmt.Errorf("version %d (%s) has no up file", v, mg.name)
 		}
-		if !p.down {
-			return fmt.Errorf("version %d (%s) has no down file", v, p.name)
+		if mg.down == "" {
+			return nil, fmt.Errorf("version %d (%s) has no down file", v, mg.name)
 		}
 	}
-	return nil
+	return versions, nil
 }
 
 // CheckUpDownUp applies the migrations of fsys one by one on an empty database with the
@@ -173,12 +180,14 @@ func Validate(fsys fs.FS) error {
 // clean. A down file that starts with IrreversibleMarker is not run.
 func CheckUpDownUp(t testing.TB, table string, fsys fs.FS) {
 	t.Helper()
-	if err := Validate(fsys); err != nil {
+	versions, err := migrations(fsys)
+	if err != nil {
 		t.Fatal(err)
 	}
 	m := open(t, DSN(t), table, fsys)
 
 	for {
+		// version fails the test on a dirty state, including after the last step.
 		before := version(t, m)
 		err := m.Steps(1)
 		if errors.Is(err, os.ErrNotExist) || errors.Is(err, migrate.ErrNoChange) {
@@ -188,7 +197,11 @@ func CheckUpDownUp(t testing.TB, table string, fsys fs.FS) {
 			t.Fatalf("up from %d: %v", before, err)
 		}
 		v := version(t, m)
-		if irreversible(t, fsys, v) {
+		down, err := fs.ReadFile(fsys, versions[uint64(v)].down)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasPrefix(strings.TrimSpace(string(down)), IrreversibleMarker) {
 			continue // its down file only fails on purpose
 		}
 		if err := m.Steps(-1); err != nil {
@@ -201,41 +214,6 @@ func CheckUpDownUp(t testing.TB, table string, fsys fs.FS) {
 			t.Fatalf("up again to %d: %v", v, err)
 		}
 	}
-	if _, dirty, _ := m.Version(); dirty {
-		t.Fatal("dirty at the end")
-	}
-}
-
-func irreversible(t testing.TB, fsys fs.FS, v uint) bool {
-	t.Helper()
-	matches, err := downFiles(fsys, v)
-	if err != nil || len(matches) != 1 {
-		t.Fatalf("down file of %d: %v %v", v, matches, err)
-	}
-	b, err := fs.ReadFile(fsys, matches[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	return strings.HasPrefix(strings.TrimSpace(string(b)), IrreversibleMarker)
-}
-
-// downFiles finds the down file of version v whatever its leading zeros (000001_, 1_).
-func downFiles(fsys fs.FS, v uint) ([]string, error) {
-	all, err := fs.Glob(fsys, "*.down.sql")
-	if err != nil {
-		return nil, err
-	}
-	var out []string
-	for _, name := range all {
-		m := fileName.FindStringSubmatch(name)
-		if m == nil {
-			continue
-		}
-		if n, err := strconv.ParseUint(m[1], 10, 64); err == nil && n == uint64(v) {
-			out = append(out, name)
-		}
-	}
-	return out, nil
 }
 
 func version(t testing.TB, m *migrate.Migrate) uint {

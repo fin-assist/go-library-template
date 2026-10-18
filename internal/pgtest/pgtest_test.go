@@ -2,7 +2,9 @@ package pgtest
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"runtime"
 	"strings"
 	"testing"
@@ -50,6 +52,17 @@ func TestValidate(t *testing.T) {
 				t.Fatalf("error %v, want one containing %q", err, c.want)
 			}
 		})
+	}
+}
+
+// unreadable is a source whose directory cannot be listed.
+type unreadable struct{}
+
+func (unreadable) Open(string) (fs.File, error) { return nil, errors.New("disk on fire") }
+
+func TestValidateReportsAnUnreadableSource(t *testing.T) {
+	if err := Validate(unreadable{}); err == nil || !strings.Contains(err.Error(), "disk on fire") {
+		t.Fatalf("error %v, want the read error", err)
 	}
 }
 
