@@ -22,7 +22,7 @@ fmt:
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) fmt ./...
 
 api: ## exported API against the latest tag and the suggested next version (informational)
-	go run $(GORELEASE) -base=$$(git tag --list 'v*' --sort=-v:refname | head -n1 | grep . || echo none)
+	-go run $(GORELEASE) -base=$$(git tag --list 'v*' --sort=-v:refname | head -n1 | grep . || echo none)
 
 release-check: ## VERSION=vX.Y.Z: gorelease accepts the version and CHANGELOG.md has its section
 	@test -n "$(VERSION)" || { echo "usage: make release-check VERSION=vX.Y.Z"; exit 2; }
