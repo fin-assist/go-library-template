@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Dependency updates (docs/releasing.md, «Как сервисы получают обновления»). Same file in go-service-template and go-library-template.",
+  "description": "Dependency updates (docs/releasing.md, «Как сервисы получают обновления»). Keep packageRules the same as in fin-assist/go-service-template.",
   "extends": ["config:recommended"],
   "timezone": "Europe/Moscow",
   "postUpdateOptions": ["gomodTidy"],
