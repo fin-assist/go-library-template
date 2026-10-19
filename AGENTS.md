@@ -111,6 +111,10 @@ The same priorities and rules as the services (`AGENTS.md` of `fin-assist/go-ser
   unit tests and runs actions on a write (`pg_notify` included) in the service's transaction. DDL inside a migration
   (a `DO` block creating the initial set of partitions, `RAISE EXCEPTION` in an irreversible down file) runs once on
   `migrate up` / `migrate down`, is not runtime logic and is allowed.
+  A cross-row invariant (a former `EXCLUDE`, «one active row», non-overlapping intervals) is expressed by a unique
+  index where possible (a partial `UNIQUE`, for example); otherwise code checks it under a lock in the service's
+  transaction — `SELECT … FOR UPDATE` of the parent row or an advisory lock — and an integration test with two
+  concurrent writers on PostgreSQL covers it.
 - Time: "now" comes from the injected clock, never `time.Now()` in logic or queries; durations for metrics and
   timeouts may use `time.Now()` / `time.Since`. Money: integer minor units (`int64`), never floats.
 - Concurrency: an exported type says whether it is safe for concurrent use; a background goroutine is started only
