@@ -32,6 +32,32 @@ GOOD = """# Изменения
 """
 
 
+class MalformedHeadingTest(unittest.TestCase):
+    """A heading with a typo used to join the body of the section above it: check passed, latest missed the
+    version, and the release workflow failed later with "the newest section is not vX.Y.Z"."""
+
+    def test_text_after_the_date_is_reported(self):
+        text = GOOD.replace("## [v0.2.0] — 2026-11-02", "## [v0.2.0] — 2026-11-02 (hotfix)")
+        s = changelog.parse(text)
+        self.assertEqual([x.name for x in s], ["Unreleased", "v0.2.0", "v0.1.1", "v0.1.0"])
+        found = changelog.problems(s)
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("line 7", found[0])
+        self.assertIn("(hotfix)", found[0])
+        self.assertEqual(changelog.latest(s), "v0.1.1", "a malformed section is not a release")
+
+    def test_heading_without_brackets_is_reported(self):
+        text = GOOD.replace("## [v0.1.1] — 2026-10-25", "## v0.1.1 — 2026-10-25")
+        found = changelog.problems(changelog.parse(text))
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("line 13", found[0])
+        self.assertIn("## [vX.Y.Z]", found[0])
+
+    def test_group_headings_are_not_sections(self):
+        s = changelog.parse(GOOD)
+        self.assertIn("### Несовместимо", s[1].body)
+
+
 class ParseTest(unittest.TestCase):
     def test_sections_in_order_with_bodies(self):
         s = changelog.parse(GOOD)
