@@ -102,6 +102,13 @@ The same priorities and rules as the services (`AGENTS.md` of `fin-assist/go-ser
 - Database: SQL with parameters only (`$1`), table and column names are constants; tables are named
   `<library>_<name>` so they never collide with a service's. Migrations follow `docs/migrations.md` of the service
   template; a released migration never changes (`docs/releasing.md`, «Миграции»).
+- No validation or logic in the schema (FIN-194, «Что можно в схеме» in the service template's
+  `docs/migrations.md`): only `PRIMARY KEY`, `UNIQUE` (partial unique indexes included), `FOREIGN KEY` (cascading
+  `ON DELETE` / `ON UPDATE` allowed), `NOT NULL`, `DEFAULT` and plain indexes. No `CHECK`, `EXCLUDE`, triggers,
+  stored functions or procedures, domains with constraints, and no generated column standing in for one of them.
+  The library checks such invariants in Go with unit tests and runs actions on a write (`pg_notify` included) in
+  the service's transaction. DDL inside a migration (a `DO` block, `RAISE EXCEPTION` in an irreversible down file)
+  is allowed.
 - Time: "now" comes from the injected clock, never `time.Now()` in logic or queries; durations for metrics and
   timeouts may use `time.Now()` / `time.Since`. Money: integer minor units (`int64`), never floats.
 - Concurrency: an exported type says whether it is safe for concurrent use; a background goroutine is started only
@@ -270,7 +277,8 @@ identifier, behaviour, migration and dependency check:
 - A new query by a key is scoped by its owner and has a test with another owner's key.
 - A write that goes with an effect uses the service's transaction and fails without one.
 - A new migration follows the service template's `docs/migrations.md`, passes squawk and up → down → up, and no
-  existing file changed.
+  existing file changed; it adds no `CHECK`, `EXCLUDE`, trigger, stored function, constrained domain or generated
+  column standing in for them (FIN-194).
 - A new metric is `finassist_<library>_…` with bounded labels and is listed in the README.
 - No logger, registry, clock or setting is taken from process-wide state.
 - Changed lines the coverage comment of the PR shows as uncovered have a reason in the PR.
