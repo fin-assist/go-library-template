@@ -109,7 +109,7 @@ The same priorities and rules as the services (`AGENTS.md` of `fin-assist/go-ser
   (`GENERATED ALWAYS AS IDENTITY`) is a separate case, a key, and is allowed too. Not allowed: `CHECK`, `EXCLUDE`,
   triggers, stored functions or procedures, domains with constraints. The library checks such invariants in Go with
   unit tests and runs actions on a write (`pg_notify` included) in the service's transaction. DDL inside a migration
-  (a `DO` block creating the first partition, `RAISE EXCEPTION` in an irreversible down file) runs once on
+  (a `DO` block creating the initial set of partitions, `RAISE EXCEPTION` in an irreversible down file) runs once on
   `migrate up` / `migrate down`, is not runtime logic and is allowed.
 - Time: "now" comes from the injected clock, never `time.Now()` in logic or queries; durations for metrics and
   timeouts may use `time.Now()` / `time.Since`. Money: integer minor units (`int64`), never floats.
