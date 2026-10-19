@@ -113,8 +113,9 @@ The same priorities and rules as the services (`AGENTS.md` of `fin-assist/go-ser
   `migrate up` / `migrate down`, is not runtime logic and is allowed.
   A cross-row invariant (a former `EXCLUDE`, «one active row», non-overlapping intervals) is expressed by a unique
   index where possible (a partial `UNIQUE`, for example); otherwise code checks it under a lock in the service's
-  transaction — `SELECT … FOR UPDATE` of the parent row or an advisory lock — and an integration test with two
-  concurrent writers on PostgreSQL covers it.
+  transaction — `SELECT … FOR UPDATE` of the parent row or a transaction-level advisory lock,
+  `pg_advisory_xact_lock(key)` (released on `COMMIT` / `ROLLBACK`; a session `pg_advisory_lock` would stay on the
+  pooled connection) — and an integration test with two concurrent writers on PostgreSQL covers it.
 - Time: "now" comes from the injected clock, never `time.Now()` in logic or queries; durations for metrics and
   timeouts may use `time.Now()` / `time.Since`. Money: integer minor units (`int64`), never floats.
 - Concurrency: an exported type says whether it is safe for concurrent use; a background goroutine is started only
