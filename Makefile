@@ -5,7 +5,8 @@ export GOPRIVATE := github.com/fin-assist/*
 
 .PHONY: test cover lint fmt api release-check
 
-test: ## unit and integration tests (Docker or TEST_DATABASE_URL), script tests, changelog format
+test: ## go.mod tidy, unit and integration tests (Docker or TEST_DATABASE_URL), script tests, changelog format
+	go mod tidy -diff
 	go vet ./...
 	go test -race -count=1 ./...
 	python3 -m unittest discover -s scripts -p 'test_*.py'

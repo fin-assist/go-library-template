@@ -19,7 +19,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CHANGELOG = ROOT / "CHANGELOG.md"
 
-_HEADING = re.compile(r"^## \[(?P<name>[^\]]+)\](?:\s+[—-]\s+(?P<date>\S+))?\s*$")
+_HEADING = re.compile(r"^## \[(?P<name>[^\]]+)\](?P<rest>.*)$")
+_DATE_SUFFIX = re.compile(r"^\s+[—-]\s+(?P<date>\S+)\s*$")
 _VERSION = re.compile(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -30,24 +31,40 @@ class Section:
     date: str | None
     line: int  # 1-based line of the heading
     body: str
+    malformed: str = ""  # why the heading does not follow the format; empty when it does
 
 
 def parse(text: str) -> list[Section]:
-    """Splits the file into "## [...]" sections in file order."""
+    """Splits the file into "## ..." sections in file order.
+
+    Every second-level heading starts a section, so a heading with a typo ("## [v0.1.0] - 2026-10-19 (hotfix)",
+    "## Notes") is reported by problems() instead of silently joining the body of the section above it."""
     sections: list[Section] = []
     body: list[str] = []
     for i, line in enumerate(text.splitlines(), start=1):
-        m = _HEADING.match(line)
-        if m:
+        if line.startswith("## "):
             if sections:
                 sections[-1].body = "\n".join(body).strip()
-            sections.append(Section(m["name"], m["date"], i, ""))
+            sections.append(_section(line, i))
             body = []
         elif sections:
             body.append(line)
     if sections:
         sections[-1].body = "\n".join(body).strip()
     return sections
+
+
+def _section(line: str, number: int) -> Section:
+    m = _HEADING.match(line)
+    if not m:
+        return Section(line[3:].strip(), None, number, "", 'a section heading is "## [vX.Y.Z] — YYYY-MM-DD" or "## [Unreleased]"')
+    rest = m["rest"]
+    if not rest.strip():
+        return Section(m["name"], None, number, "")
+    d = _DATE_SUFFIX.match(rest)
+    if not d:
+        return Section(m["name"], None, number, "", f"unexpected text after the heading: {rest.strip()!r}")
+    return Section(m["name"], d["date"], number, "")
 
 
 def version_key(v: str) -> tuple[int, int, int]:
@@ -65,6 +82,9 @@ def problems(sections: list[Section]) -> list[str]:
     seen: set[str] = set()
     previous: tuple[int, int, int] | None = None
     for s in sections:
+        if s.malformed:
+            out.append(f"line {s.line}: {s.malformed}")
+            continue
         if s.name == "Unreleased":
             if s is not sections[0]:
                 out.append(f'line {s.line}: "Unreleased" must be the first section')
@@ -88,7 +108,7 @@ def problems(sections: list[Section]) -> list[str]:
 
 def latest(sections: list[Section]) -> str:
     for s in sections:
-        if _VERSION.match(s.name):
+        if _VERSION.match(s.name) and not s.malformed:
             return s.name
     return ""
 
