@@ -102,6 +102,20 @@ The same priorities and rules as the services (`AGENTS.md` of `fin-assist/go-ser
 - Database: SQL with parameters only (`$1`), table and column names are constants; tables are named
   `<library>_<name>` so they never collide with a service's. Migrations follow `docs/migrations.md` of the service
   template; a released migration never changes (`docs/releasing.md`, «Миграции»).
+- No validation or logic in the schema (FIN-194, «Что можно в схеме» in the service template's `docs/migrations.md`):
+  allowed are `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY` with any `ON DELETE` / `ON UPDATE` action (`SET DEFAULT`
+  included), `NOT NULL`, `DEFAULT`, indexes (unique, partial and expression ones included) and generated columns
+  `GENERATED ALWAYS AS (…) STORED` (a value computed for storage or search, not validation); an identity column
+  (`GENERATED ALWAYS AS IDENTITY`) is a separate case, a key, and is allowed too. Not allowed: `CHECK`, `EXCLUDE`,
+  triggers, stored functions or procedures, domains with constraints. The library checks such invariants in Go with
+  unit tests and runs actions on a write (`pg_notify` included) in the service's transaction. DDL inside a migration
+  (a `DO` block creating the initial set of partitions, `RAISE EXCEPTION` in an irreversible down file) runs once on
+  `migrate up` / `migrate down`, is not runtime logic and is allowed.
+  A cross-row invariant (a former `EXCLUDE`, «one active row», non-overlapping intervals) is expressed by a unique
+  index where possible (a partial `UNIQUE`, for example); otherwise code checks it under a lock in the service's
+  transaction — `SELECT … FOR UPDATE` of the parent row or a transaction-level advisory lock,
+  `pg_advisory_xact_lock(key)` (released on `COMMIT` / `ROLLBACK`; a session `pg_advisory_lock` would stay on the
+  pooled connection) — and an integration test with two concurrent writers on PostgreSQL covers it.
 - Time: "now" comes from the injected clock, never `time.Now()` in logic or queries; durations for metrics and
   timeouts may use `time.Now()` / `time.Since`. Money: integer minor units (`int64`), never floats.
 - Concurrency: an exported type says whether it is safe for concurrent use; a background goroutine is started only
@@ -270,7 +284,8 @@ identifier, behaviour, migration and dependency check:
 - A new query by a key is scoped by its owner and has a test with another owner's key.
 - A write that goes with an effect uses the service's transaction and fails without one.
 - A new migration follows the service template's `docs/migrations.md`, passes squawk and up → down → up, and no
-  existing file changed.
+  existing file changed; it adds no `CHECK`, `EXCLUDE`, trigger, stored function or procedure, or domain with
+  constraints (FIN-194; indexes, expression ones included, and generated columns are allowed).
 - A new metric is `finassist_<library>_…` with bounded labels and is listed in the README.
 - No logger, registry, clock or setting is taken from process-wide state.
 - Changed lines the coverage comment of the PR shows as uncovered have a reason in the PR.
