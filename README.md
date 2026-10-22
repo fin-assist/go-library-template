@@ -6,6 +6,10 @@
 - [CHANGELOG.md](CHANGELOG.md) — изменения по версиям.
 - [AGENTS.md](AGENTS.md) — карта и правила для агентов, Code Review Rules.
 
+## Автоматизация обновлений зависимостей
+
+[Политика Renovate](docs/renovate-policy.md) (FIN-211): одна актуальная release/main, автомерж полностью ботских PR после обязательного CI, один повтор красного CI и закрытие с явным повтором через Dependency Dashboard. AndroidX/Compose остаются на ручной проверке. Исходные группировки, ограничения версий и расписания — `renovate-base.json`; generated target и quarantine — ветка `renovate-policy`. Активация требует отдельного токена и строгой защиты веток; по умолчанию выключена.
+
 ## Новая библиотека из шаблона
 
 1. Создать репозиторий `fin-assist/go-<назначение>` из шаблона (GitHub → «Use this template») или влить шаблон в уже созданный.
@@ -15,6 +19,8 @@
 5. Переписать первый абзац этого README, раздел «Внедрение» ниже и первый абзац `AGENTS.md`.
 6. Секреты репозитория: `CLAUDE_CODE_OAUTH_TOKEN` (ревью `@claude`), `GO_MODULES_TOKEN` при приватных модулях. Claude GitHub App, Codex и Renovate стоят на организации.
 7. Первый выпуск — `v0.1.0` по [docs/releasing.md](docs/releasing.md).
+
+Перед первым запуском Renovate заменить **оба** `local>` ref в `renovate.json` на новый `fin-assist/<repo>`. GitHub template не копирует служебную ветку: создать собственную `renovate-policy` по [инструкции bootstrap](docs/renovate-policy.md#подготовка-и-включение), затем защитить её и настроить `controllerLogin`, обязательные checks и Environment `renovate-policy` с запуском только из `main` и доступ к organization secret `RENOVATE_POLICY_TOKEN` (выбранный владельцем вариант; новому репозиторию явно проверить доступность секрета). Проверить, что оба presets разрешаются из нового репозитория, а не из шаблона. До проверки оставить `RENOVATE_POLICY_ENABLED` выключенным; секреты, environments и branch protection из шаблона не наследуются.
 
 ## Раскладка
 
