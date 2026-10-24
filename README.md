@@ -62,7 +62,7 @@ CI (`.github/workflows/ci.yml`):
 | `api` | `gorelease`: изменения экспортируемого API против последнего тега и предлагаемая версия; на PR выпуска — проверка номера из `CHANGELOG.md` |
 | `migrations` (PR) | существующие миграции не изменены, squawk по новым |
 
-Тег `vX.Y.Z` запускает `.github/workflows/release.yml`: проверка тега и GitHub Release с текстом из `CHANGELOG.md`.
+Тег `vX.Y.Z` запускает `.github/workflows/release.yml`: проверка тега и GitHub Release с текстом из `CHANGELOG.md`. Повторный запуск сохраняет существующий Release; актуальную проверку старого тега можно запустить вручную из `main` по [инструкции](docs/releasing.md#выпуск).
 
 Локально:
 
