@@ -350,11 +350,15 @@ class PinTests(unittest.TestCase):
         self.assertIsNone(owning_module("a.example/mx", modules))
         self.assertIsNone(owning_module("fmt", modules))
 
-    def test_every_pinned_module_is_imported_by_the_probe(self):
+    def test_pins_and_probe_imports_match(self):
         modules = [*HAND_PINS, *FROM_GO_MOD]
         imported = {owning_module(path, modules) for path in probe_imports()}
         for module in modules:
             self.assertIn(module, imported, f"{module} is pinned but the probe does not import it")
+        # The reverse: every non-stdlib import (its first path element has a dot) belongs to a pinned module.
+        unpinned = sorted(path for path in probe_imports()
+                          if "." in path.split("/")[0] and owning_module(path, modules) is None)
+        self.assertEqual(unpinned, [], "the probe imports modules without a pin")
 
 
 class ProbeTests(unittest.TestCase):
