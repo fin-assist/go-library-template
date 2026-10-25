@@ -28,7 +28,7 @@
 doc.go               package documentation: what the library does and what it needs from the service
 migrations.go        Migrations, MigrationsName, MigrationsTable for the service's migration runner
 migrations/          SQL migrations of the library, embedded (NNN_name.up.sql / .down.sql)
-internal/pgtest/     PostgreSQL for tests and the up -> down -> up check, same rules as the service runner
+internal/pgtest/     test PostgreSQL server selection; databases and up -> down -> up via go-migrate/migratetest
 scripts/             independent suite guards, external coverage policy and CHANGELOG checks
 docs/releasing.md    versions and releases
 ```
