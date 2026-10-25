@@ -51,7 +51,7 @@ def expected_pin(module, hand, go_mod):
     """The version the probe requires for module and whether tidy must keep it exactly.
 
     A module in go.mod: max(go.mod, the hand pin if set), exactly. A module absent from go.mod: the hand pin,
-    which tidy may raise (a newer grpc can need a newer otel/log) but never lower. A module of FROM_GO_MOD
+    which tidy may raise (a newer go.mod dependency can need it) but never lower. A module of FROM_GO_MOD
     has no hand pin and must be in go.mod.
     """
     from_go_mod = required_version(module, go_mod)
@@ -234,21 +234,34 @@ def module_path(import_path):
     return import_path.rsplit("/", 1)[-1]
 
 
-def forbidden_file(imports, build="", name="Forbidden"):
-    lines = ([build, ""] if build else []) + ["package probe", "", "import ("]
+def forbidden_file(imports):
+    lines = ["package probe", "", "import ("]
     lines += [f'\t"{path}"' for path in imports]
-    lines += [")", "", f"// {name} references every forbidden identifier on its own line.", f"func {name}() {{"]
+    lines += [")", "", "// Forbidden references every forbidden identifier on its own line.", "func Forbidden() {"]
     expected = set()
     for path, names in imports.items():
         for name in names:  # every name of the family, one per line
             lines.append(f"\t_ = {module_path(path)}.{name}")
             expected.add(len(lines))
-    if not build:
-        for builtin in ["print", "println"]:
-            lines.append(f'\t{builtin}("x")')
-            expected.add(len(lines))
+    for builtin in ["print", "println"]:
+        lines.append(f'\t{builtin}("x")')
+        expected.add(len(lines))
     lines.append("}")
     return "\n".join(lines) + "\n", expected
+
+
+def probe_imports():
+    """Every import path of the probe: the FORBIDDEN keys and the import lines of the fixed files."""
+    paths = set(FORBIDDEN)
+    for text in [CHAINS, BLANK, ALLOWED]:
+        paths |= set(re.findall(r'^\t(?:\w+ )?"([^"]+)"', text, re.M))
+    return paths
+
+
+def owning_module(import_path, modules):
+    """The longest module of modules that contains import_path (k8s.io/klog/v2 is not k8s.io/klog), or None."""
+    owners = [module for module in modules if import_path == module or import_path.startswith(module + "/")]
+    return max(owners, key=len, default=None)
 
 
 def lint(root, tool, goos):
@@ -324,12 +337,24 @@ class PinTests(unittest.TestCase):
         self.assertIn("dropped", pin_violation("m", "v1.0.0", None, exact=False))
         self.assertIn("dropped", pin_violation("m", "v1.0.0", None, exact=True))
 
-    def test_repository_pins_follow_the_rule(self):
+    def test_from_go_mod_has_no_hand_pin(self):
         for module in FROM_GO_MOD:
-            self.assertEqual(PINS[module], (required_version(module, GO_MOD), True), module)
             self.assertNotIn(module, HAND_PINS, module)
-        for module, hand in HAND_PINS.items():
-            self.assertEqual(PINS[module], expected_pin(module, hand, GO_MOD), module)
+
+    def test_owning_module_is_the_longest_match(self):
+        modules = ["k8s.io/klog", "k8s.io/klog/v2", "a.example/m"]
+        self.assertEqual(owning_module("k8s.io/klog", modules), "k8s.io/klog")
+        self.assertEqual(owning_module("k8s.io/klog/v2", modules), "k8s.io/klog/v2")
+        self.assertEqual(owning_module("k8s.io/klog/v2/sub", modules), "k8s.io/klog/v2")
+        self.assertEqual(owning_module("a.example/m/sub", modules), "a.example/m")
+        self.assertIsNone(owning_module("a.example/mx", modules))
+        self.assertIsNone(owning_module("fmt", modules))
+
+    def test_every_pinned_module_is_imported_by_the_probe(self):
+        modules = [*HAND_PINS, *FROM_GO_MOD]
+        imported = {owning_module(path, modules) for path in probe_imports()}
+        for module in modules:
+            self.assertIn(module, imported, f"{module} is pinned but the probe does not import it")
 
 
 class ProbeTests(unittest.TestCase):
