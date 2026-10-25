@@ -298,8 +298,11 @@ updates the library.
   mandatory rules, then performance; a performance finding needs a measurement or an evident cost, not a guess.
 - Post each finding as an inline comment on the changed line. The summary lists what was checked, with a
   «Безопасность», a «Тесты» and a «Совместимость» part; «not affected» is a valid answer, with one line why.
-- Check that the PR references its YouTrack issue, adds its `CHANGELOG.md` line including docs/test/CI-only changes,
-  and updates `README.md` («Внедрение»), this file and `docs/` when it changes what they describe.
+- Check that the PR references its YouTrack issue, adds its `CHANGELOG.md` line including docs/test/CI-only changes
+  (except bot-only dependency PRs of Renovate, FIN-211). A release PR checks the whole `git diff <last tag> -- go.mod`:
+  every raised `go` directive or major of a shared dependency has a «Несовместимо» line, from its PR or added by the
+  release PR; undescribed Renovate changes (`git log -p <last tag>..HEAD -- go.mod`) go under «Изменено». Also check
+  that the PR updates `README.md` («Внедрение»), this file and `docs/` when it changes what they describe.
 
 ### Security
 
@@ -359,7 +362,8 @@ identifier, behaviour, migration and dependency check:
 ### Checklist
 
 - New code has unit tests; new functionality has integration tests; entry points have usage tests and examples.
-- API or behaviour changed — a `CHANGELOG.md` line; incompatible — under «Несовместимо», and the PR says so.
+- Every PR has a `CHANGELOG.md` line, except bot-only Renovate dependency PRs (summarised by the release PR);
+  incompatible — under «Несовместимо», and the PR says so.
 - A new client-facing error goes through `finerr`; a new reason or metadata key exists in `contracts` first.
 - A new query by a key is scoped by its owner and has a test with another owner's key.
 - A write that goes with an effect uses the service's transaction and fails without one.
