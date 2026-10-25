@@ -39,7 +39,7 @@ for itself: what it does, its YouTrack issue, which services use it.
 | PostgreSQL for tests, up → down → up check | `internal/pgtest/` (mirrors `migratetest` of the service template) |
 | Integration guide for services | `README.md`, «Внедрение» |
 | Versions, compatibility, releases, Renovate | `docs/releasing.md`, `CHANGELOG.md`, `.github/workflows/release.yml`, `renovate.json` |
-| Coverage of changed lines, changelog checks | `scripts/` |
+| Independent statements coverage guards and changelog checks | `scripts/` |
 | CI, lint | `.github/workflows/ci.yml`, `.golangci.yml`, `.squawk.toml`, `Makefile` |
 | PR review by Claude | `.github/workflows/claude.yml` |
 
@@ -160,24 +160,48 @@ Also:
   connections, two goroutines released together, a transaction rolled back mid-way; no sleeps for synchronisation —
   wait on a channel or a condition with a deadline. Run with `-race`.
 - Tests assert behaviour; a test that only executes lines or asserts on a fake it set up itself is not coverage.
-- The measurable check is coverage of changed lines: at least 80 % of changed executable lines of production code
-  (`make cover`; CI posts the table in the PR). Uncovered changed lines are listed in the PR («Как проверено») with
-  the reason; an uncovered line without a reason is a review finding.
+- FIN-243 requires independent unit/integration/public API total80 statements gates; see Independent coverage below.
+  Coverage percentages do not replace scenario review.
 
 ## Checks
 
 CI (table in `README.md`): `go mod tidy` clean, `go vet`, `go test -race` with PostgreSQL 18 in Docker and coverage
-of changed lines, script tests and the `CHANGELOG.md` format, golangci-lint, `gorelease` against the latest tag, and
+of three independent suites, script tests and the `CHANGELOG.md` format, golangci-lint, `gorelease` against the latest tag, and
 on PRs the migration checks (existing files unchanged, squawk on new ones). Run `make test` (or `make cover`),
 `make lint` and `make api` before pushing.
 
-### Coverage reports (FIN-210)
+### Independent coverage (FIN-243)
 
-CI reports project totals and changed executable lines together from the same profile of the root Go module in one
-updated PR comment and the run summary; push runs retain project totals. The 80% target remains for changed
-lines only. Count unique lines in blocks with nonzero statement counts, including generated production code;
-exclude `_test.go` and `testdata/`. An empty profile means no data, never 100%. Fork PRs cannot post comments.
-Test changes to the report with `python3 -m unittest discover -s scripts -p 'test_coverage_diff.py'`.
+Unit, integration and public API each require total >=80% Go statements independently, using
+pinned go-test-coverage/v2 v2.20.1 and its owner-approved 79.95% rounding. Every suite instruments
+the same packages from go list -race ./..., excluding only the exact module/internal/pgtest package
+(owner decision 2026-10-25). All tests still run over ./..., including pgtest tests; other ordinary
+.go helpers and generated production code remain instrumented.
+Combined uses the tool's native comma-profile union and never compensates for a failed level.
+
+Name tests TestUnit..., TestIntegration... or TestAPI... and fuzz targets FuzzUnit...,
+FuzzIntegration... or FuzzAPI.... Race-enabled inventory rejects unclassified tests/fuzz targets
+before every collector. Executable Example... functions run in API; examples without Output
+remain compile-only as in go test. Unit uses no DB/network. Integration uses real dependencies.
+API exercises exported Go contracts as a service consumer, including caller-owned PostgreSQL
+transactions and actual transport/interceptor chains where applicable; internal fake handlers
+are not public API tests. Keep existing examples and all existing tests.
+
+make collect-{unit,integration,api} runs separate race/count1 Go suites with a timeout.
+check-suite.sh requires an executed passing Test event, rejects failed/skipped tests and a
+missing/empty/header-only/zero-statement profile. It validates execution evidence, not coverage
+percentages. Each make check-... invokes the pinned external analyzer. CI=true makes a missing
+PostgreSQL dependency an error; ordinary packages with no tests may have package skip events.
+The existing required job go checks all six collector/threshold outcomes and fails closed.
+Artifacts contain profiles, execution JSONL, native breakdowns/reports and a run summary; fork
+PRs use read-only permissions and never write coverage comments. Run make test, make lint and
+make api with process timeouts; no UI tests or version tags are part of this change.
+
+A scaffold with no executable public implementation or a deficit is an unmet criterion, not a
+passing empty library. Current measurements and remaining gaps belong in the PR and docs/testing.md.
+Only the exact internal/pgtest package is excluded from all three instrumentation lists.
+A similarly named package or a nested package is not excluded. No executable production statements
+means the existing profile guard fails; an empty scaffold never passes as 100%.
 
 ## Workflow
 
@@ -205,8 +229,8 @@ Test changes to the report with `python3 -m unittest discover -s scripts -p 'tes
   - `@codex` — the Codex GitHub integration under the owner's ChatGPT subscription. Its model is chosen by OpenAI
     and cannot be pinned from here; a pinned model would need the OpenAI API with per-token billing, which was
     declined (FIN-103).
-  - A review is requested only once `.github/workflows/claude.yml` is on `main`: comment-triggered workflows run
-    from the default branch.
+  - Request Claude only when `.github/workflows/claude.yml` is in main. This restriction applies only to Claude;
+    request Codex independently when its integration is available.
   - Replies in threads and other comments never mention `@codex` or `@claude`: any mention with text starts them
     again.
 - Waiting for the review: react to the PR's GitHub events when the session receives them; otherwise check 3 minutes
@@ -233,7 +257,7 @@ updates the library.
   mandatory rules, then performance; a performance finding needs a measurement or an evident cost, not a guess.
 - Post each finding as an inline comment on the changed line. The summary lists what was checked, with a
   «Безопасность», a «Тесты» and a «Совместимость» part; «not affected» is a valid answer, with one line why.
-- Check that the PR references its YouTrack issue, adds its `CHANGELOG.md` line when it changes API or behaviour,
+- Check that the PR references its YouTrack issue, adds its `CHANGELOG.md` line including docs/test/CI-only changes,
   and updates `README.md` («Внедрение»), this file and `docs/` when it changes what they describe.
 
 ### Security
@@ -303,7 +327,7 @@ identifier, behaviour, migration and dependency check:
   constraints (FIN-194; indexes, expression ones included, and generated columns are allowed).
 - A new metric is `finassist_<library>_…` with bounded labels and is listed in the README.
 - No logger, registry, clock or setting is taken from process-wide state.
-- Changed lines the coverage comment of the PR shows as uncovered have a reason in the PR.
+- Each suite independently meets its total80 statements gate; unmet scenarios and coverage remain explicit.
 
 ## Renovate automation
 
