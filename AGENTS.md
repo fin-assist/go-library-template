@@ -170,6 +170,10 @@ of three independent suites, script tests and the `CHANGELOG.md` format, golangc
 on PRs the migration checks (existing files unchanged, squawk on new ones). Run `make test` (or `make cover`),
 `make lint` and `make api` before pushing.
 
+Workflows: every `actions/checkout` except `release.yml` and `claude.yml` sets `persist-credentials: false`, and a
+`run:` script reads branch names and event fields from `env:`, never from `${{ … }}` in its text (FIN-301,
+`scripts/test_workflow_hardening.py`).
+
 ### Independent coverage (FIN-243)
 
 Unit, integration and public API each require total >=80% Go statements independently, using
