@@ -188,20 +188,30 @@ transactions and actual transport/interceptor chains where applicable; internal 
 are not public API tests. Keep existing examples and all existing tests.
 
 make collect-{unit,integration,api} runs separate race/count1 Go suites with a timeout.
-check-suite.sh requires an executed passing Test event, rejects failed/skipped tests and a
-missing/empty/header-only/zero-statement profile. It validates execution evidence, not coverage
-percentages. Each make check-... invokes the pinned external analyzer. CI=true makes a missing
+check-suite.sh requires an executed passing Test event and rejects failed/skipped tests and a
+missing/empty/corrupt/zero-statement profile. It validates execution evidence, not coverage
+percentages. Each make check-... invokes the pinned external analyzer when statements exist. CI=true makes a missing
 PostgreSQL dependency an error; ordinary packages with no tests may have package skip events.
 The existing required job go checks all six collector/threshold outcomes and fails closed.
 Artifacts contain profiles, execution JSONL, native breakdowns/reports and a run summary; fork
 PRs use read-only permissions and never write coverage comments. Run make test, make lint and
 make api with process timeouts; no UI tests or version tags are part of this change.
 
-A scaffold with no executable public implementation or a deficit is an unmet criterion, not a
-passing empty library. Current measurements and remaining gaps belong in the PR and docs/testing.md.
 Only the exact internal/pgtest package is excluded from all three instrumentation lists.
 A similarly named package or a nested package is not excluded. No executable production statements
-means the existing profile guard fails; an empty scaffold never passes as 100%.
+means the profile guard fails in every library created from this template, even before its module
+path is renamed. Current measurements and remaining gaps belong in the PR and docs/testing.md.
+
+FIN-247 (owner decision 2026-10-25): only the original fin-assist/go-library-template may report
+N/A for the exact header-only `mode: atomic` profile after a successful, nonempty suite without
+skips/failures. GitHub Actions uses GITHUB_REPOSITORY; local runs require the original template's
+exact origin URL. Do not rewrite the fixed repository identity in scripts/check-suite.sh when
+creating a library; update the new repository's origin instead. Missing, empty or corrupt files
+never qualify. The first executable production statement automatically restores the native total80
+gate for every level, including zero-hit profiles. Combined is N/A only if all three validated
+profiles are N/A; mixed applicability fails. Required go, all suites, lint and migration checks
+remain mandatory. Other libraries and go-service-template keep strict gates; no dummy implementation
+is added to the template, and N/A is never reported as 100% coverage.
 
 ## Workflow
 

@@ -13,7 +13,7 @@
 ## Новая библиотека из шаблона
 
 1. Создать репозиторий `fin-assist/go-<назначение>` из шаблона (GitHub → «Use this template») или влить шаблон в уже созданный.
-2. Заменить модуль и пакет: `go mod edit -module github.com/fin-assist/go-<назначение>`, пути импорта (`grep -rl go-library-template | xargs sed -i 's#fin-assist/go-library-template#fin-assist/go-<назначение>#g'`), `package library` → `package <назначение>` в корневых файлах, `MigrationsName` в `migrations.go`.
+2. Заменить модуль и пакет: `go mod edit -module github.com/fin-assist/go-<назначение>`, пути импорта в Go-файлах, `package library` → `package <назначение>` в корневых файлах, `MigrationsName` в `migrations.go`. Не заменять имя исходного репозитория в `scripts/check-suite.sh`: это ограничитель исключения N/A, который новая библиотека не наследует. При локальном клонировании сменить `origin` на новый репозиторий перед проверками; в Actions проверяется `GITHUB_REPOSITORY`.
 3. Библиотека без таблиц удаляет `migrations.go`, `migrations_test.go` и каталог `migrations/`; без gRPC — ничего не добавляет.
 4. Если библиотека строит ошибки для клиентов — `go get github.com/fin-assist/contracts/gen/go@<версия>` и конструкторы `finerr`.
 5. Переписать первый абзац этого README, раздел «Внедрение» ниже и первый абзац `AGENTS.md`.
@@ -57,7 +57,7 @@ CI (`.github/workflows/ci.yml`):
 
 | Job | Что |
 |---|---|
-| `go` | tidy/vet, race inventory; independent unit/integration/API statements profiles and total80 gates; script/CHANGELOG checks; read-only reports and artifacts |
+| `go` | tidy/vet, race inventory; независимые unit/integration/API statements-профили и total80 (N/A только у исходного пустого шаблона); проверки скриптов/CHANGELOG; отчёты и artifacts |
 | `lint` | golangci-lint (`.golangci.yml`): `forbidigo` против обхода `finerr` и против глобальных логгера, реестра метрик и переменных окружения; `depguard` против фреймворков |
 | `api` | `gorelease`: изменения экспортируемого API против последнего тега и предлагаемая версия; на PR выпуска — проверка номера из `CHANGELOG.md` |
 | `migrations` (PR) | существующие миграции не изменены, squawk по новым |
@@ -83,6 +83,8 @@ FIN-243: каждый из unit/integration/API независимо требу�
 
 Все три набора выполняют `./...` и инструментируют одинаковые пакеты из `go list -race ./...`, исключая только точный пакет `<module>/internal/pgtest` по решению владельца 25.10.2026. Остальные обычные `.go` helpers и generated production code учитываются; тесты pgtest продолжают исполняться. Имена TestUnit/TestIntegration/TestAPI и FuzzUnit/FuzzIntegration/FuzzAPI проверяются race inventory до сборщика; исполняемые Example входят в API. Unit не использует БД/сеть, integration использует реальные зависимости, API проверяет публичный Go-контракт от лица потребителя. API не означает новый HTTP/gRPC сервис.
 
-Пустые/пропущенные/упавшие наборы и отсутствующие/пустые/zero-statement профили не проходят guard; недоступный PostgreSQL при CI=true — ошибка. Обязательный job `go` падает при любой ошибке одного из трёх уровней, даже если combined выше80. Отчёты и профили сохраняются в CI artifacts; fork PR не пишет комментарии. Собственного расчёта процентов и merge нет.
+Пустые/пропущенные/упавшие наборы и отсутствующие/пустые/повреждённые профили не проходят guard; недоступный PostgreSQL при CI=true — ошибка. Обязательный job `go` падает при любой ошибке одного из трёх уровней, даже если combined выше80. Отчёты и профили сохраняются в CI artifacts; fork PR не пишет комментарии. Собственного расчёта процентов и merge нет.
+
+FIN-247: только исходный `fin-assist/go-library-template` получает **N/A**, когда успешный suite сформировал точный профиль `mode: atomic` без блоков. Три набора по-прежнему обязаны выполнить тесты без skips/failures; lint, миграции и прочие проверки сохраняются. Идентичность проверяется по `GITHUB_REPOSITORY` в GitHub Actions, локально — по точному `origin` исходного шаблона. При появлении первого production statement автоматически включается штатный порог80 каждого уровня, в том числе при нуле покрытых statements. Combined получает N/A только при трёх валидных N/A профилях; смешанные пустые/непустые профили отклоняются. Созданные из шаблона библиотеки отклоняют пустой профиль даже до смены module path. `go-service-template` и остальные библиотеки сохраняют строгие правила.
 
 [docs/testing.md](docs/testing.md) описывает уровни и границы; актуальные проценты и невыполненные критерии указаны в PR.
