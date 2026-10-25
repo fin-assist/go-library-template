@@ -36,13 +36,26 @@ linters:
         - pattern: ^slog\.(Default|SetDefault|Debug|Info|Warn|Error|Log)(Context|Attrs)?$
           pkg: ^log/slog$
           msg: take a *slog.Logger from the service
+        - pattern: ^slog\.SetLogLoggerLevel$
+          pkg: ^log/slog$
+          msg: take a *slog.Logger from the service
         - pattern: ^log\.(Print|Fatal|Panic)(f|ln)?$
           pkg: ^log$
           msg: take a *slog.Logger from the service
-        - pattern: ^(prometheus\.(MustRegister|Register)|promauto\.New.*)$
+        - pattern: ^log\.(Default|Writer|SetOutput|SetFlags|SetPrefix|Flags|Prefix|Output)$
+          pkg: ^log$
+          msg: take a *slog.Logger from the service
+        - pattern: ^prometheus\.(MustRegister|Register|Unregister|DefaultRegisterer|DefaultGatherer)$
+          pkg: ^github\.com/prometheus/client_golang/prometheus$
           msg: register metrics on the prometheus.Registerer the service passes in
-        - pattern: ^os\.(Getenv|LookupEnv|Environ)$
+        - pattern: ^promauto\.New.*$
+          pkg: ^github\.com/prometheus/client_golang/prometheus/promauto$
+          msg: register metrics on the prometheus.Registerer the service passes in
+        - pattern: ^os\.(Getenv|LookupEnv|Environ|ExpandEnv|Setenv|Unsetenv|Clearenv)$
           pkg: ^os$
+          msg: a library takes its settings from the service, not from the environment
+        - pattern: ^syscall\.(Getenv|Environ|Setenv|Unsetenv|Clearenv)$
+          pkg: ^syscall$
           msg: a library takes its settings from the service, not from the environment
     depguard:
       # No frameworks, ORMs, DI containers; the standard library first (AGENTS.md, «Principles»).

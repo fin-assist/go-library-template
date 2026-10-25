@@ -89,8 +89,11 @@ The same priorities and rules as the services (`AGENTS.md` of `fin-assist/go-ser
   (inside a transaction, on the primary, after the identity interceptor) and which errors come back.
 - **No process-wide state.** The service passes everything in: `*slog.Logger`, `prometheus.Registerer`, the clock
   (`func() time.Time`), settings in an options struct with documented defaults. No `init()` with side effects, no
-  package-level mutable variables, no reading the environment; `forbidigo` rejects `slog.Default`, `log.Print*`,
-  `prometheus.MustRegister`, `promauto` and `os.Getenv` outside tests.
+  package-level mutable variables, no reading the environment; `forbidigo` rejects outside tests the default
+  loggers (`slog.Default`, package-level `slog`/`log` calls, `log.Default`, `log.SetOutput`, …), the default
+  metrics registry (`prometheus.MustRegister`/`Register`, `prometheus.DefaultRegisterer`/`DefaultGatherer`,
+  `promauto.New*`; `promauto.With(reg)` is allowed) and the environment (`os.Getenv`, `os.LookupEnv`, `os.Environ`,
+  `os.ExpandEnv`, `os.Setenv`, `syscall.Getenv`, …); `scripts/test_lint_policy.py` keeps the list from shrinking.
 - **The service owns the transaction.** A library that writes together with the effect (idempotency, outbox,
   tombstone) takes it through a consumer interface — `interface{ Tx(context.Context) (pgx.Tx, bool) }`, implemented
   by `postgres.DB` of the service template — and returns an error when there is none, instead of writing outside it.
