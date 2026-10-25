@@ -18,7 +18,7 @@ Guard требует реально выполненный passing Test/Example/
 
 CI сохраняет unit/integration/API/combined reports, native breakdowns, JSONL и профили как artifacts. Его прежний required check `go` проверяет все шесть collector/check outcomes; промежуточный continue-on-error не скрывает ошибку. Права только read, комментариев coverage нет, fork PR сохраняет ограничения. Job `api` по-прежнему означает gorelease compatibility и не заменяет API-тесты.
 
-`make test`, `make lint`, `make api` выполняются до публикации. Release/CHANGELOG/migrations/Renovate проверки сохранены. Новые версии и теги не создаются.
+`make test`, `make lint`, `make api` выполняются до публикации. Release/CHANGELOG/migrations и определения Renovate checks сохранены. Из-за постоянно красного `go` контроллер FIN-211 при включённом `RENOVATE_POLICY_ENABLED=true` после retry закроет dependency-only PR и поставит версии в exact quarantine. Это эксплуатационное изменение: перед merge и активацией шаблона нужно отдельно согласовать паузу controller merge/retry/close до появления исполняемого production-кода и зелёных трёх уровней; coverage из обязательного go не исключается. См. docs/renovate-policy.md, раздел о пустом шаблоне. Новые версии и теги не создаются.
 
 ## Граница шаблона
 
