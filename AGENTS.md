@@ -268,8 +268,8 @@ updates the library.
 - Post each finding as an inline comment on the changed line. The summary lists what was checked, with a
   «Безопасность», a «Тесты» and a «Совместимость» part; «not affected» is a valid answer, with one line why.
 - Check that the PR references its YouTrack issue, adds its `CHANGELOG.md` line including docs/test/CI-only changes
-  (except bot-only dependency PRs of Renovate, FIN-211: the release PR summarises them from `git log` since the last
-  tag), and updates `README.md` («Внедрение»), this file and `docs/` when it changes what they describe.
+  (except bot-only dependency PRs of Renovate, FIN-211: the release PR summarises them from `git diff <last tag> --
+  go.mod`, incompatible ones under «Несовместимо»), and updates `README.md` («Внедрение»), this file and `docs/` when it changes what they describe.
 
 ### Security
 
