@@ -13,10 +13,10 @@
 ## Новая библиотека из шаблона
 
 1. Создать репозиторий `fin-assist/go-<назначение>` из шаблона (GitHub → «Use this template») или влить шаблон в уже созданный.
-2. Заменить модуль и пакет: `go mod edit -module github.com/fin-assist/go-<назначение>`, пути импорта в Go-файлах, `package library` → `package <назначение>` в корневых файлах, `MigrationsName` в `migrations.go`. Не заменять имя исходного репозитория в `scripts/check-suite.sh`: это ограничитель исключения N/A, который новая библиотека не наследует. При локальном клонировании сменить `origin` на новый репозиторий перед проверками; в Actions проверяется `GITHUB_REPOSITORY`.
-3. Библиотека без таблиц удаляет `migrations.go`, `migrations_test.go` и каталог `migrations/`; без gRPC — ничего не добавляет.
+2. Заменить модуль и пакет: `go mod edit -module github.com/fin-assist/go-<назначение>`, пути импорта в Go-файлах, `package library` → `package <назначение>` в корневых файлах, `MigrationsName` в `migrations.go` и ожидаемое имя источника в `migration_api_test.go`, `formatters.settings.goimports.local-prefixes` в `.golangci.yml`, описание пакета в `doc.go`. Не заменять имя исходного репозитория в `scripts/check-suite.sh`: это ограничитель исключения N/A, который новая библиотека не наследует. При локальном клонировании сменить `origin` на новый репозиторий перед проверками; в Actions проверяется `GITHUB_REPOSITORY`.
+3. Библиотека без таблиц удаляет `migrations.go`, `migrations_test.go`, `migration_api_test.go` и каталог `migrations/` и добавляет свой первый `TestAPI…` или исполняемый `Example…`: иначе набор API пуст и `scripts/check-suite.sh` его отклонит. Библиотека с таблицами убирает из `migration_api_test.go` проверку отсутствия SQL или заменяет этот тест usage-тестом своих миграций. Без gRPC — ничего не добавляет.
 4. Если библиотека строит ошибки для клиентов — `go get github.com/fin-assist/contracts/gen/go@<версия>` и конструкторы `finerr`.
-5. Переписать первый абзац этого README, раздел «Внедрение» ниже и первый абзац `AGENTS.md`.
+5. Переписать первый абзац этого README, раздел «Внедрение» ниже и первый абзац `AGENTS.md`. В `CHANGELOG.md` очистить `[Unreleased]` от записей шаблона и оставить одну строку с задачей создания библиотеки: иначе изменения шаблона попадут в заметки её первого выпуска.
 6. Секреты репозитория: `CLAUDE_CODE_OAUTH_TOKEN` (ревью `@claude`), `GO_MODULES_TOKEN` при приватных модулях. Claude GitHub App, Codex и Renovate стоят на организации.
 7. Первый выпуск — `v0.1.0` по [docs/releasing.md](docs/releasing.md).
 
@@ -28,7 +28,7 @@
 doc.go               package documentation: what the library does and what it needs from the service
 migrations.go        Migrations, MigrationsName, MigrationsTable for the service's migration runner
 migrations/          SQL migrations of the library, embedded (NNN_name.up.sql / .down.sql)
-internal/pgtest/     PostgreSQL for tests and the up -> down -> up check, same rules as the service runner
+internal/pgtest/     test PostgreSQL server selection; databases and up -> down -> up via go-migrate/migratetest
 scripts/             independent suite guards, external coverage policy and CHANGELOG checks
 docs/releasing.md    versions and releases
 ```
