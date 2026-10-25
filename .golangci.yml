@@ -43,7 +43,8 @@ linters:
         - pattern: ^log\.(Print|Printf|Println|Fatal|Fatalf|Fatalln|Panic|Panicf|Panicln|Default|Writer|SetOutput|SetFlags|SetPrefix|Flags|Prefix|Output)$
           pkg: ^log$
           msg: take a *slog.Logger from the service
-        - pattern: ^grpclog\..+$
+        # Only the functions that write to or replace the global logger: types and NewLoggerV2* stay allowed.
+        - pattern: ^grpclog\.(Info|Infof|Infoln|InfoDepth|Warning|Warningf|Warningln|WarningDepth|Error|Errorf|Errorln|ErrorDepth|Fatal|Fatalf|Fatalln|FatalDepth|Print|Printf|Println|V|Component|SetLogger|SetLoggerV2)$
           pkg: ^google\.golang\.org/grpc/grpclog$
           msg: take a *slog.Logger from the service
         - pattern: ^prometheus\.(MustRegister|Register|Unregister|DefaultRegisterer|DefaultGatherer)$
@@ -55,14 +56,14 @@ linters:
         - pattern: ^promhttp\.Handler$
           pkg: ^github\.com/prometheus/client_golang/prometheus/promhttp$
           msg: serve the registry the service passes in (promhttp.HandlerFor)
-        - pattern: ^expvar\..+$
-          pkg: ^expvar$
-          msg: expvar is a process-wide registry; export metrics through the service's registerer
         - pattern: ^http\.(DefaultClient|DefaultTransport|DefaultServeMux|Handle|HandleFunc|Get|Head|Post|PostForm|ListenAndServe|ListenAndServeTLS)$
           pkg: ^net/http$
           msg: take the *http.Client or the handler from the service
-        - pattern: ^otel\.(Get|Set).+$
+        - pattern: ^otel\.(Get.+|Set.+|Tracer|Meter|Handle)$
           pkg: ^go\.opentelemetry\.io/otel$
+          msg: take the provider from the service
+        - pattern: ^global\.(GetLoggerProvider|SetLoggerProvider|Logger)$
+          pkg: ^go\.opentelemetry\.io/otel/log/global$
           msg: take the provider from the service
         - pattern: ^signal\.(Notify|NotifyContext|Ignore|Reset|Stop)$
           pkg: ^os/signal$
@@ -70,10 +71,10 @@ linters:
         - pattern: ^os\.(Getenv|LookupEnv|Environ|ExpandEnv|Setenv|Unsetenv|Clearenv|Args|UserHomeDir|UserConfigDir|UserCacheDir)$
           pkg: ^os$
           msg: a library takes its settings from the service, not from the environment
-        - pattern: ^syscall\.(Getenv|Environ|Setenv|Unsetenv|Clearenv)$
+        - pattern: ^syscall\.(Getenv|Environ|Setenv|Unsetenv|Clearenv|GetEnvironmentVariable|SetEnvironmentVariable|GetEnvironmentStrings)$
           pkg: ^syscall$
           msg: a library takes its settings from the service, not from the environment
-        - pattern: ^(unix|windows)\.(Getenv|Environ|Setenv|Unsetenv|Clearenv)$
+        - pattern: ^(unix|windows)\.(Getenv|Environ|Setenv|Unsetenv|Clearenv|GetEnvironmentVariable|SetEnvironmentVariable)$
           pkg: ^golang\.org/x/sys/(unix|windows)$
           msg: a library takes its settings from the service, not from the environment
     depguard:
@@ -81,6 +82,13 @@ linters:
       rules:
         main:
           deny:
+            # Imported even blank, these register handlers on http.DefaultServeMux in init.
+            - pkg: expvar
+              desc: expvar is a process-wide registry published on http.DefaultServeMux; export metrics through the service's registerer
+            - pkg: net/http/pprof
+              desc: registers /debug/pprof on http.DefaultServeMux in init; the service mounts pprof itself
+            - pkg: golang.org/x/net/trace
+              desc: registers /debug/requests on http.DefaultServeMux in init
             - pkg: github.com/gin-gonic/gin
               desc: no web frameworks, use net/http
             - pkg: github.com/labstack/echo
