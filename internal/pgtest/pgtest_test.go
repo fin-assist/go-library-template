@@ -2,9 +2,7 @@ package pgtest
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io/fs"
 	"runtime"
 	"strings"
 	"testing"
@@ -15,6 +13,8 @@ import (
 
 func file(s string) *fstest.MapFile { return &fstest.MapFile{Data: []byte(s)} }
 
+// Validate delegates to migrate.Validate; these cases only show the delegation keeps the
+// rules the library relies on. The rules themselves are tested in go-migrate.
 func TestUnitValidate(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -23,24 +23,19 @@ func TestUnitValidate(t *testing.T) {
 	}{
 		{"empty", fstest.MapFS{}, ""},
 		{"pairs and non-SQL files", fstest.MapFS{
-			"embed.go":              file("package migrations"),
-			"000001_a.up.sql":       file("SELECT 1"),
-			"000001_a.down.sql":     file("SELECT 1"),
-			"000002_b_c.up.sql":     file("SELECT 1"),
-			"000002_b_c.down.sql":   file("SELECT 1"),
-			"README.md":             file("notes"),
-			"sub/000009_x.up.sql":   file("ignored: not at the root"),
-			"sub/000009_x.down.sql": file("ignored"),
+			"embed.go":            file("package migrations"),
+			"000001_a.up.sql":     file("SELECT 1"),
+			"000001_a.down.sql":   file("SELECT 1"),
+			"README.md":           file("notes"),
+			"sub/000009_x.up.sql": file("ignored: not at the root"),
 		}, ""},
 		{"bad name", fstest.MapFS{"1-add.up.sql": file("")}, "does not match"},
-		{"upper case", fstest.MapFS{"000001_Add.up.sql": file("")}, "does not match"},
 		{"no down", fstest.MapFS{"000001_a.up.sql": file("")}, "has no down file"},
 		{"no up", fstest.MapFS{"000001_a.down.sql": file("")}, "has no up file"},
 		{"one version, two names", fstest.MapFS{
 			"000001_a.up.sql":   file(""),
 			"000001_b.down.sql": file(""),
 		}, "is used by"},
-		{"version overflow", fstest.MapFS{"99999999999999999999_a.up.sql": file("")}, "version"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -55,14 +50,25 @@ func TestUnitValidate(t *testing.T) {
 	}
 }
 
-// unreadable is a source whose directory cannot be listed.
-type unreadable struct{}
+func TestUnitExplicitServerDoesNotStartContainer(t *testing.T) {
+	t.Setenv("TEST_DATABASE_URL", "explicit-test-server")
+	t.Setenv("TEST_POSTGRES_IMAGE", "must-not-be-pulled")
+	dsn, err := server()
+	if err != nil || dsn != "explicit-test-server" {
+		t.Fatalf("explicit server selection: %q %v", dsn, err)
+	}
+}
 
-func (unreadable) Open(string) (fs.File, error) { return nil, errors.New("disk on fire") }
-
-func TestUnitValidateReportsAnUnreadableSource(t *testing.T) {
-	if err := Validate(unreadable{}); err == nil || !strings.Contains(err.Error(), "disk on fire") {
-		t.Fatalf("error %v, want the read error", err)
+func TestUnitCheckUpDownUpRejectsInvalidFilesBeforeConnecting(t *testing.T) {
+	r := &recorder{TB: t}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		CheckUpDownUp(r, "lib_schema_migrations", fstest.MapFS{"000001_a.up.sql": file("")})
+	}()
+	<-done
+	if !r.failed || !strings.Contains(r.msg, "has no down file") {
+		t.Fatalf("failure %v %q, want the validation error", r.failed, r.msg)
 	}
 }
 
@@ -115,7 +121,6 @@ func TestIntegrationCheckUpDownUpCatchesBadMigrations(t *testing.T) {
 			"000001_a.up.sql":   file("CREATE TABLE"),
 			"000001_a.down.sql": file("SELECT 1"),
 		}, "up from 0"},
-		{"invalid files", fstest.MapFS{"000001_a.up.sql": file("")}, "has no down file"},
 	}
 	// Without PostgreSQL the test skips here, not inside the recorder.
 	_ = DSN(t)
