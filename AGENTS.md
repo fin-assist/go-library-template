@@ -101,8 +101,10 @@ The same priorities and rules as the services (`AGENTS.md` of `fin-assist/go-ser
   `os.User*Dir`, `syscall` and `golang.org/x/sys/unix|windows` env calls, Win32 included). By the owner's decision it
   also rejects package-level `flag` functions and `flag.CommandLine` (a passed `*flag.FlagSet` from `flag.NewFlagSet`
   stays allowed), `os.Stdout`/`os.Stderr`/`os.Stdin` (take an `io.Writer`/`io.Reader`), `runtime/debug.Set*`,
-  `runtime.GOMAXPROCS` and changing the working directory (`os.Chdir`, `syscall`/`x/sys` `Chdir`/`Fchdir`/
-  `SetCurrentDirectory`). `os.TempDir`, `os.CreateTemp` and `os.MkdirTemp` are rejected entirely: with an empty `dir`
+  `runtime.GOMAXPROCS`/`SetDefaultGOMAXPROCS` and changing the working directory (`os.Chdir`, `(*os.File).Chdir`,
+  `syscall`/`x/sys` `Chdir`/`Fchdir`/`SetCurrentDirectory`). A library takes a pool or worker count from the service's
+  options; a read-only `runtime.GOMAXPROCS(0)` as the default of such an option carries `//nolint:forbidigo` with
+  the reason «read-only». `os.TempDir`, `os.CreateTemp` and `os.MkdirTemp` are rejected entirely: with an empty `dir`
   they use the process-wide temp directory and lint cannot tell an empty argument from a passed one, so a library
   takes the directory from the service and creates files in it (`os.OpenFile`, `os.Mkdir`); a deliberate
   `CreateTemp(dir, …)` with a validated non-empty `dir` from the caller carries a `//nolint:forbidigo` with that

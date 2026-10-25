@@ -82,15 +82,16 @@ linters:
         - pattern: ^os\.(TempDir|CreateTemp|MkdirTemp)$
           pkg: ^os$
           msg: take the directory from the service; lint cannot tell an empty dir from a passed one (AGENTS.md)
-        - pattern: ^os\.Chdir$
+        # (*os.File).Chdir matches as os.File.Chdir with analyze-types.
+        - pattern: ^os\.(Chdir|File\.Chdir)$
           pkg: ^os$
           msg: the working directory is process-wide; use paths relative to a directory the service passes
         - pattern: ^debug\.Set.+$
           pkg: ^runtime/debug$
           msg: runtime tuning is process-wide and belongs to the service's main
-        - pattern: ^runtime\.GOMAXPROCS$
+        - pattern: ^runtime\.(GOMAXPROCS|SetDefaultGOMAXPROCS)$
           pkg: ^runtime$
-          msg: runtime tuning is process-wide and belongs to the service's main
+          msg: take the pool size from the service's options; a read-only GOMAXPROCS(0) default needs nolint with the reason (AGENTS.md)
         - pattern: ^syscall\.(Chdir|Fchdir|SetCurrentDirectory)$
           pkg: ^syscall$
           msg: the working directory is process-wide; use paths relative to a directory the service passes

@@ -91,7 +91,7 @@ FORBIDDEN = {
              "UintVar", "Usage", "Var", "Visit", "VisitAll"],
     "runtime/debug": ["SetCrashOutput", "SetGCPercent", "SetMaxStack", "SetMaxThreads", "SetMemoryLimit",
                       "SetPanicOnFault", "SetTraceback"],
-    "runtime": ["GOMAXPROCS"],
+    "runtime": ["GOMAXPROCS", "SetDefaultGOMAXPROCS"],
 }
 PLATFORM = {
     "unix": {"golang.org/x/sys/unix": ["Getenv", "Environ", "Setenv", "Unsetenv", "Clearenv", "Chdir", "Fchdir"],
@@ -111,19 +111,21 @@ import (
 	stdlog "log"
 	"log/slog"
 	"net/http"
+	"os"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel"
 )
 
-// Chains reaches process-wide state through a chain or an alias.
-func Chains(ctx context.Context, c prometheus.Collector, req *http.Request) {
+// Chains reaches process-wide state through a chain, an alias or a method.
+func Chains(ctx context.Context, c prometheus.Collector, req *http.Request, f *os.File) {
 	prometheus.DefaultRegisterer.MustRegister(c) // want
 	stdlog.Default().Printf("x")                 // want
 	slog.Default().InfoContext(ctx, "x")         // want
 	_, _ = http.DefaultClient.Do(req)            // want
 	_ = otel.GetTracerProvider().Tracer("x")     // want
 	stdlog.Printf("x")                           // want
+	_ = f.Chdir()                                // want
 }
 '''
 
@@ -193,6 +195,10 @@ func Allowed(ctx context.Context, l *slog.Logger, reg prometheus.Registerer, c p
 	_, _ = debug.ReadBuildInfo()
 	_ = debug.Stack()
 	_ = runtime.NumCPU()
+	_ = runtime.GOMAXPROCS(0) //nolint:forbidigo // read-only default of a pool size the service may override
+	file, _ := os.Open("x")
+	_ = file.Name()
+	_, _ = file.ReadDir(1)
 	l.InfoContext(ctx, "x")
 	l.Info("x")
 	slog.New(slog.NewTextHandler(w, nil)).ErrorContext(ctx, "x", slog.String("k", "v"))
