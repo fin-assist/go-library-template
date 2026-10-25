@@ -59,9 +59,10 @@ the PR with why it is needed: every service that imports the library inherits it
   point the tests at it: `TEST_DATABASE_URL='postgres://postgres@localhost:<port>/postgres?sslmode=disable' make test`.
   Without either, integration tests are skipped locally and fail in CI (`CI` set) — a skip is not a pass.
 - `make lint` and `make api` run the pinned tools through `go run`; no separate install.
-- The script tests need PyYAML (`python3-yaml`); `scripts/test_lint_policy.py` also builds the pinned golangci-lint and
-  downloads the probe's pinned modules (prometheus, grpc, otel, x/sys; versions in the script or from `go.mod`), so it
-  needs the module proxy.
+- The script tests need PyYAML (`python3-yaml`, or `pip install pyyaml`): `scripts/test_workflow_hardening.py` parses
+  the workflows with `yaml.safe_load` and fails without it. `scripts/test_lint_policy.py` also builds the pinned
+  golangci-lint and downloads the probe's pinned modules (prometheus, grpc, otel, x/sys; versions in the script or from
+  `go.mod`), so it needs the module proxy.
 - `make cover` needs the `covdata` tool, which a toolchain downloaded by `GOTOOLCHAIN` lacks ("no such tool
   covdata"): build it once with `T=$(go env GOTOOLDIR); chmod u+w "$T"; go build -o "$T/covdata" cmd/covdata`.
 - Every test or lint run gets a timeout (`timeout 600 make test` or the tool's own): a hung run blocks the session.
@@ -200,6 +201,10 @@ CI (table in `README.md`): `go mod tidy` clean, `go vet`, `go test -race` with P
 of three independent suites, script tests and the `CHANGELOG.md` format, golangci-lint, `gorelease` against the latest tag, and
 on PRs the migration checks (existing files unchanged, squawk on new ones). Run `make test` (or `make cover`),
 `make lint` and `make api` before pushing.
+
+Workflows: every `actions/checkout` except `release.yml` and `claude.yml` sets `persist-credentials: false`, and a
+`run:` script reads branch names and event fields from `env:`, never from `${{ … }}` in its text (FIN-301,
+`scripts/test_workflow_hardening.py`, which checks the values decoded by PyYAML in `*.yml` and `*.yaml`).
 
 ### Independent coverage (FIN-243)
 
