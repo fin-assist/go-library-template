@@ -86,7 +86,7 @@ jobs:
               echo 'Coverage unavailable: suite collection or input validation failed.' >> "$GITHUB_STEP_SUMMARY"
             fi
           done
-          echo 'Each suite requires total80 independently, with go-test-coverage v2.20.1 rounding. Combined is informational.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Each suite requires total80 independently, with go-test-coverage v2.20.1 rounding. Only the original empty go-library-template reports N/A after successful suites. Combined is informational.' >> "$GITHUB_STEP_SUMMARY"
           echo "[Coverage artifacts]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID#artifacts)" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -113,7 +113,7 @@ jobs:
         run: |
           for outcome in "$COLLECT_UNIT" "$CHECK_UNIT" "$COLLECT_INTEGRATION" "$CHECK_INTEGRATION" "$COLLECT_API" "$CHECK_API"; do
             if [ "$outcome" != success ]; then
-              echo 'Every suite must execute without skips and independently meet total80.' >&2
+              echo 'Every suite must execute without skips and independently meet total80 or the original empty template N/A rule.' >&2
               exit 1
             fi
           done

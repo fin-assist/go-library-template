@@ -34,7 +34,12 @@ collect-unit collect-integration collect-api: test-names
 
 check-unit check-integration check-api:
 	@set -euo pipefail; level='$(@:check-%=%)'; \
-	bash scripts/check-suite.sh "$$level.jsonl" "$$level.out"; \
+	rm -f "$$level.report.txt" "$$level.coverage.txt"; \
+	applicability=$$(bash scripts/check-suite.sh "$$level.jsonl" "$$level.out"); \
+	if [ "$$applicability" = N/A ]; then \
+	  echo 'N/A: original go-library-template has no executable production statements; suite passed.' | tee "$$level.report.txt"; \
+	  exit 0; \
+	fi; \
 	$(COVERAGE) --config .testcoverage.yml --profile "$$level.out" \
 	  --breakdown-file-name "$$level.coverage.txt" | tee "$$level.report.txt"
 
@@ -46,8 +51,18 @@ cover-api: collect-api
 	$(MAKE) check-api
 
 cover-combined: ## informational union; the tool merges profiles, never percentages
-	@set -euo pipefail; for level in unit integration api; do bash scripts/check-suite.sh "$$level.jsonl" "$$level.out"; done
-	set -euo pipefail; $(COVERAGE) --profile unit.out,integration.out,api.out \
+	@set -euo pipefail; rm -f combined.report.txt combined.coverage.txt; applicability=''; \
+	for level in unit integration api; do \
+	  current=$$(bash scripts/check-suite.sh "$$level.jsonl" "$$level.out"); \
+	  if [ -n "$$applicability" ] && [ "$$applicability" != "$$current" ]; then \
+	    echo 'Coverage profiles disagree on production statement applicability.' >&2; exit 1; \
+	  fi; applicability="$$current"; \
+	done; \
+	if [ "$$applicability" = N/A ]; then \
+	  echo 'N/A: original go-library-template has no executable production statements; all three suites passed.' | tee combined.report.txt; \
+	  exit 0; \
+	fi; \
+	$(COVERAGE) --profile unit.out,integration.out,api.out \
 	  --breakdown-file-name combined.coverage.txt | tee combined.report.txt
 
 cover: collect-unit collect-integration collect-api ## collect all profiles before enforcing the three gates

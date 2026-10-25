@@ -1,5 +1,6 @@
 """Execution-evidence guard tests; no coverage calculation is implemented here."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -10,7 +11,7 @@ GUARD = Path(__file__).with_name("check-suite.sh").resolve()
 
 
 class SuiteInputsTests(unittest.TestCase):
-    def check(self, events, profile, expected):
+    def check(self, events, profile, expected, repository="fin-assist/go-example", origin=None):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             log = root / "suite.jsonl"
@@ -18,11 +19,20 @@ class SuiteInputsTests(unittest.TestCase):
             coverage = root / "suite.out"
             if profile is not None:
                 coverage.write_text(profile)
+            if origin is not None:
+                subprocess.run(["git", "init", "-q", str(root)], check=True, timeout=10)
+                subprocess.run(["git", "-C", str(root), "remote", "add", "origin", origin],
+                               check=True, timeout=10)
+            env = dict(os.environ, GITHUB_ACTIONS="true", GITHUB_REPOSITORY=repository)
+            if origin is not None:
+                env.pop("GITHUB_ACTIONS")
+                env.pop("GITHUB_REPOSITORY")
             result = subprocess.run(
                 ["bash", str(GUARD), str(log), str(coverage)],
-                capture_output=True, text=True, timeout=10,
+                cwd=root, env=env, capture_output=True, text=True, timeout=10,
             )
             self.assertEqual(result.returncode == 0, expected, result.stderr)
+            return result.stdout.strip()
 
     def test_executed_test_and_packages_without_tests(self):
         self.check([
@@ -58,6 +68,59 @@ class SuiteInputsTests(unittest.TestCase):
             result = subprocess.run(["bash", str(GUARD), str(log), str(log)],
                                     capture_output=True, timeout=10)
             self.assertNotEqual(result.returncode, 0)
+
+    def test_only_original_template_can_report_na(self):
+        passed = [{"Action": "pass", "Test": "TestUnitRule"}]
+        self.assertEqual(self.check(passed, "mode: atomic\n", True,
+                                    repository="fin-assist/go-library-template"), "N/A")
+        for repository in ["", "fin-assist/go-example", "someone/go-library-template",
+                           "fin-assist/go-library-template-copy"]:
+            with self.subTest(repository=repository):
+                self.check(passed, "mode: atomic\n", False, repository=repository)
+        # GitHub identity wins over a stale template origin in a newly created repository.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True, timeout=10)
+            subprocess.run(["git", "-C", str(root), "remote", "add", "origin",
+                            "https://github.com/fin-assist/go-library-template.git"], check=True, timeout=10)
+            (root / "suite.jsonl").write_text(json.dumps(passed[0]) + "\n")
+            (root / "suite.out").write_text("mode: atomic\n")
+            result = subprocess.run(["bash", str(GUARD), "suite.jsonl", "suite.out"], cwd=root,
+                                    env=dict(os.environ, GITHUB_ACTIONS="true", GITHUB_REPOSITORY="fin-assist/go-new"),
+                                    capture_output=True, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+
+    def test_local_original_remote_and_clone(self):
+        passed = [{"Action": "pass", "Test": "TestUnitRule"}]
+        for origin in ["https://github.com/fin-assist/go-library-template.git",
+                       "https://github.com/fin-assist/go-library-template",
+                       "git@github.com:fin-assist/go-library-template.git",
+                       "ssh://git@github.com/fin-assist/go-library-template.git"]:
+            with self.subTest(origin=origin):
+                self.assertEqual(self.check(passed, "mode: atomic\n", True, origin=origin), "N/A")
+        for origin in ["https://github.com/fin-assist/go-new.git",
+                       "https://github.com/someone/go-library-template.git",
+                       "https://github.com/fin-assist/go-library-template.git/extra"]:
+            with self.subTest(origin=origin):
+                self.check(passed, "mode: atomic\n", False, origin=origin)
+
+    def test_na_does_not_accept_bad_profile_or_suite(self):
+        passed = [{"Action": "pass", "Test": "TestUnitRule"}]
+        for profile in [None, "", "mode: count\n", "mode: atomic", "mode: atomic\n\n",
+                        "mode: atomic\ngarbage\n", "mode: atomic\nx.go:1.1,1.2 0 1\n"]:
+            with self.subTest(profile=profile):
+                self.check(passed, profile, False, repository="fin-assist/go-library-template")
+        for events in [[], [{"Action": "pass", "Package": "template"}],
+                       passed + [{"Action": "skip", "Test": "TestUnitSkipped"}],
+                       passed + [{"Action": "fail", "Test": "TestUnitFailed"}],
+                       passed + [{"Action": "fail", "Package": "template"}]]:
+            with self.subTest(events=events):
+                self.check(events, "mode: atomic\n", False, repository="fin-assist/go-library-template")
+
+    def test_production_statements_never_report_na(self):
+        self.assertEqual(self.check([{"Action": "pass", "Test": "TestUnitRule"}],
+                                    "mode: atomic\nx.go:1.1,1.2 1 0\n", True,
+                                    repository="fin-assist/go-library-template"), "statements")
 
 
 if __name__ == "__main__":
