@@ -89,6 +89,14 @@ linters:
               desc: registers /debug/pprof on http.DefaultServeMux in init; the service mounts pprof itself
             - pkg: golang.org/x/net/trace
               desc: registers /debug/requests on http.DefaultServeMux in init
+            # Global loggers: glogger replaces the gRPC logger in init; glog/klog register flags and write to os.TempDir.
+            # depguard matches a prefix, so k8s.io/klog covers k8s.io/klog/v2.
+            - pkg: google.golang.org/grpc/grpclog/glogger
+              desc: calls grpclog.SetLoggerV2 in init; the service installs the gRPC logger
+            - pkg: github.com/golang/glog
+              desc: global logger with flags and files in os.TempDir; use log/slog
+            - pkg: k8s.io/klog
+              desc: global logger with flags; use log/slog
             - pkg: github.com/gin-gonic/gin
               desc: no web frameworks, use net/http
             - pkg: github.com/labstack/echo

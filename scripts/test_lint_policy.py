@@ -38,13 +38,17 @@ def module_version(module):
 
 
 # The probe is hermetic: every module it compiles is pinned, so an upstream release cannot break CI.
-# Versions present in go.mod follow it; the others are explicit and changed in a reviewed PR.
+# Versions present in go.mod follow it (Renovate updates them there). Renovate does not read the
+# constants below: they are raised by hand in a reviewed PR, when the libraries or services move to a
+# new prometheus/grpc/otel/klog release, or when the probe needs an API that only a newer release has.
 GO_VERSION = re.search(r"^go (\S+)$", GO_MOD, re.M)[1]
 PINNED = {
     "github.com/prometheus/client_golang": "v1.23.2",
     "google.golang.org/grpc": "v1.84.0",
     "go.opentelemetry.io/otel": module_version("go.opentelemetry.io/otel"),
     "go.opentelemetry.io/otel/log": "v0.20.0",  # the release paired with otel v1.44.0
+    "k8s.io/klog": "v1.0.0",
+    "k8s.io/klog/v2": "v2.130.1",
     "go.opentelemetry.io/otel/metric": module_version("go.opentelemetry.io/otel/metric"),
     "go.opentelemetry.io/otel/trace": module_version("go.opentelemetry.io/otel/trace"),
     "golang.org/x/sys": module_version("golang.org/x/sys"),
@@ -110,13 +114,17 @@ func Chains(ctx context.Context, c prometheus.Collector, req *http.Request) {
 }
 '''
 
-# Imported even blank, these change http.DefaultServeMux in init: depguard rejects each import line.
+# Imported even blank, these change process-wide state in init: depguard rejects each import line.
 BLANK = '''package probe
 
 import (
-	_ "expvar"                 // want
-	_ "golang.org/x/net/trace" // want
-	_ "net/http/pprof"         // want
+	_ "expvar"                                 // want
+	_ "github.com/golang/glog"                 // want
+	_ "golang.org/x/net/trace"                 // want
+	_ "google.golang.org/grpc/grpclog/glogger" // want
+	_ "k8s.io/klog"                            // want
+	_ "k8s.io/klog/v2"                         // want
+	_ "net/http/pprof"                         // want
 )
 '''
 

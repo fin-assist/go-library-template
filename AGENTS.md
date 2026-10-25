@@ -99,14 +99,19 @@ The same priorities and rules as the services (`AGENTS.md` of `fin-assist/go-ser
   globals (`http.DefaultClient`, `http.Get`, `http.Handle`, `otel.Get*`/`Set*`/`Tracer`/`Meter`/`Handle`,
   `otel/log/global`), `os/signal` and the environment (`os.Getenv` and the rest of the family, `os.Args`,
   `os.User*Dir`, `syscall` and `golang.org/x/sys/unix|windows` env calls, Win32 included). `depguard` rejects even a
-  blank import of `expvar`, `net/http/pprof` and `golang.org/x/net/trace`: they register handlers on
-  `http.DefaultServeMux` in `init`. Injected forms stay allowed: `promauto.With(reg)`, `promhttp.HandlerFor`,
+  blank import of `expvar`, `net/http/pprof` and `golang.org/x/net/trace` (handlers on `http.DefaultServeMux` in
+  `init`), `google.golang.org/grpc/grpclog/glogger` (replaces the gRPC logger in `init`), `github.com/golang/glog` and
+  `k8s.io/klog`. Injected forms stay allowed: `promauto.With(reg)`, `promhttp.HandlerFor`,
   `InstrumentMetricHandler(reg, …)`, `grpclog.LoggerV2` and `NewLoggerV2*` for an adapter the service installs,
   methods of a passed `*slog.Logger`, `Registerer`, `*http.Client`, `TracerProvider` or `MeterProvider`.
   `scripts/test_lint_policy.py` runs the pinned linter (version from `Makefile`, equal to `ci.yml`) on a hermetic probe
   module with pinned dependencies, for linux and windows: every forbidden and allowed form, chains such as
   `prometheus.DefaultRegisterer.MustRegister(c)` or `log.Default().Printf` and an aliased import are reported by their
   first identifier. `flag`, `os.Stdout`/`os.Stderr` and `os.TempDir` await the owner's decision.
+  Lint cannot see options: a library always passes the providers explicitly (`otelhttp`/`otelgrpc` with
+  `WithTracerProvider`/`WithMeterProvider`; without them they take the global ones). grpc-go itself imports
+  `golang.org/x/net/trace` unless built with the `grpcnotrace` tag; that is the service's build decision. The probe's
+  pinned versions outside `go.mod` (`PINNED` in the script) are raised by hand: Renovate does not read them.
 - **The service owns the transaction.** A library that writes together with the effect (idempotency, outbox,
   tombstone) takes it through a consumer interface — `interface{ Tx(context.Context) (pgx.Tx, bool) }`, implemented
   by `postgres.DB` of the service template — and returns an error when there is none, instead of writing outside it.
