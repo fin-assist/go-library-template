@@ -58,7 +58,7 @@ CI (`.github/workflows/ci.yml`):
 | Job | Что |
 |---|---|
 | `go` | tidy/vet, race inventory; независимые unit/integration/API statements-профили и total80 (N/A только у исходного пустого шаблона); проверки скриптов/CHANGELOG; отчёты и artifacts |
-| `lint` | golangci-lint (`.golangci.yml`): `forbidigo` против обхода `finerr` и против глобальных логгера, реестра метрик, переменных окружения и прочего процессного состояния (`os.Exit`, `time.Local`, профилирование runtime и др., `AGENTS.md`); `depguard` против фреймворков |
+| `lint` | golangci-lint (`.golangci.yml`): `forbidigo` против обхода `finerr` и против ядра процессного состояния (глобальные логгер, метрики, HTTP, OpenTelemetry, окружение и процесс, `AGENTS.md`); `depguard` против фреймворков и пакетов с побочными эффектами init |
 | `api` | `gorelease`: изменения экспортируемого API против последнего тега и предлагаемая версия; на PR выпуска — проверка номера из `CHANGELOG.md` |
 | `migrations` (PR) | существующие миграции не изменены, squawk по новым |
 
