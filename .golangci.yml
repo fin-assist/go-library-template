@@ -104,6 +104,31 @@ linters:
         - pattern: ^(unix|windows)\.(Getenv|Environ|Setenv|Unsetenv|Clearenv|GetEnvironmentVariable|SetEnvironmentVariable)$
           pkg: ^golang\.org/x/sys/(unix|windows)$
           msg: a library takes its settings from the service, not from the environment
+        # Owner decision (FIN-322): process exit, process attributes, profiling rates, the local time
+        # zone and the raw standard stream descriptors belong to the service (AGENTS.md, «Writing code»).
+        - pattern: ^os\.Exit$
+          pkg: ^os$
+          msg: return an error; exiting the process is the service's decision (AGENTS.md)
+        - pattern: ^syscall\.(Umask|Setrlimit|Chroot)$
+          pkg: ^syscall$
+          msg: process attributes are process-wide and belong to the service's main (AGENTS.md)
+        - pattern: ^unix\.(Umask|Setrlimit|Chroot)$
+          pkg: ^golang\.org/x/sys/unix$
+          msg: process attributes are process-wide and belong to the service's main (AGENTS.md)
+        - pattern: ^runtime\.(SetBlockProfileRate|SetCPUProfileRate|SetMutexProfileFraction|MemProfileRate)$
+          pkg: ^runtime$
+          msg: profiling rates are process-wide and belong to the service's main (AGENTS.md)
+        # Both reading and assigning: a calendar zone comes from the service (the user's profile zone).
+        - pattern: ^time\.Local$
+          pkg: ^time$
+          msg: take the *time.Location from the service; time.Local is the process zone (AGENTS.md)
+        # os.NewFile over these descriptors bypasses the os.Stdout/os.Stderr/os.Stdin rule.
+        - pattern: ^syscall\.(Stdin|Stdout|Stderr)$
+          pkg: ^syscall$
+          msg: take an io.Writer / io.Reader or a *slog.Logger from the service (AGENTS.md)
+        - pattern: ^(unix|windows)\.(Stdin|Stdout|Stderr)$
+          pkg: ^golang\.org/x/sys/(unix|windows)$
+          msg: take an io.Writer / io.Reader or a *slog.Logger from the service (AGENTS.md)
     depguard:
       # No frameworks, ORMs, DI containers; the standard library first (AGENTS.md, «Principles»).
       rules:

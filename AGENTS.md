@@ -103,7 +103,12 @@ The same priorities and rules as the services (`AGENTS.md` of `fin-assist/go-ser
   also rejects package-level `flag` functions and `flag.CommandLine` (a passed `*flag.FlagSet` from `flag.NewFlagSet`
   stays allowed), `os.Stdout`/`os.Stderr`/`os.Stdin` (take an `io.Writer`/`io.Reader`), `runtime/debug.Set*`,
   `runtime.GOMAXPROCS`/`SetDefaultGOMAXPROCS` and changing the working directory (`os.Chdir`, `(*os.File).Chdir`,
-  `syscall`/`x/sys` `Chdir`/`Fchdir`/`SetCurrentDirectory`). A library takes a pool or worker count from the service's
+  `syscall`/`x/sys` `Chdir`/`Fchdir`/`SetCurrentDirectory`). FIN-322 adds `os.Exit` (return an error; exiting is the
+  service's decision), `syscall`/`x/sys/unix` `Umask`/`Setrlimit`/`Chroot`, the runtime profiling rates
+  (`runtime.SetBlockProfileRate`/`SetCPUProfileRate`/`SetMutexProfileFraction`/`MemProfileRate`), `time.Local` (read
+  and assignment: a calendar zone comes from the service as a `*time.Location`) and the raw descriptors
+  `syscall`/`x/sys` `Stdin`/`Stdout`/`Stderr` (`os.NewFile` over them bypasses the `os.Stdout` rule); `os.Getwd`
+  (read-only) and `runtime.LockOSThread` (current goroutine only) stay allowed. A library takes a pool or worker count from the service's
   options; a read-only `runtime.GOMAXPROCS(0)` as the default of such an option carries `//nolint:forbidigo` with
   the reason «read-only». `os.TempDir`, `os.CreateTemp` and `os.MkdirTemp` are rejected entirely: with an empty `dir`
   they use the process-wide temp directory and lint cannot tell an empty argument from a passed one, so a library

@@ -83,22 +83,25 @@ FORBIDDEN = {
     "os/signal": ["Notify", "NotifyContext", "Ignore", "Reset", "Stop"],
     "os": ["Getenv", "LookupEnv", "Environ", "ExpandEnv", "Setenv", "Unsetenv", "Clearenv", "Args",
            "UserHomeDir", "UserConfigDir", "UserCacheDir", "Stdout", "Stderr", "Stdin", "TempDir",
-           "CreateTemp", "MkdirTemp", "Chdir"],
-    "syscall": ["Getenv", "Environ", "Setenv", "Unsetenv", "Clearenv", "Chdir"],
+           "CreateTemp", "MkdirTemp", "Chdir", "Exit"],
+    "syscall": ["Getenv", "Environ", "Setenv", "Unsetenv", "Clearenv", "Chdir", "Stdin", "Stdout", "Stderr"],
     "flag": ["Arg", "Args", "Bool", "BoolFunc", "BoolVar", "CommandLine", "Duration", "DurationVar", "Float64",
              "Float64Var", "Func", "Int", "Int64", "Int64Var", "IntVar", "Lookup", "NArg", "NFlag", "Parse",
              "Parsed", "PrintDefaults", "Set", "String", "StringVar", "TextVar", "Uint", "Uint64", "Uint64Var",
              "UintVar", "Usage", "Var", "Visit", "VisitAll"],
     "runtime/debug": ["SetCrashOutput", "SetGCPercent", "SetMaxStack", "SetMaxThreads", "SetMemoryLimit",
                       "SetPanicOnFault", "SetTraceback"],
-    "runtime": ["GOMAXPROCS", "SetDefaultGOMAXPROCS"],
+    "runtime": ["GOMAXPROCS", "SetDefaultGOMAXPROCS", "SetBlockProfileRate", "SetCPUProfileRate",
+                "SetMutexProfileFraction", "MemProfileRate"],
+    "time": ["Local"],
 }
 PLATFORM = {
-    "unix": {"golang.org/x/sys/unix": ["Getenv", "Environ", "Setenv", "Unsetenv", "Clearenv", "Chdir", "Fchdir"],
-             "syscall": ["Fchdir"]},
+    "unix": {"golang.org/x/sys/unix": ["Getenv", "Environ", "Setenv", "Unsetenv", "Clearenv", "Chdir", "Fchdir",
+                                       "Umask", "Setrlimit", "Chroot", "Stdin", "Stdout", "Stderr"],
+             "syscall": ["Fchdir", "Umask", "Setrlimit", "Chroot"]},
     "windows": {"golang.org/x/sys/windows": ["Getenv", "Environ", "Setenv", "Unsetenv", "Clearenv",
                                              "GetEnvironmentVariable", "SetEnvironmentVariable", "Chdir",
-                                             "SetCurrentDirectory"],
+                                             "SetCurrentDirectory", "Stdin", "Stdout", "Stderr"],
                 "syscall": ["GetEnvironmentVariable", "SetEnvironmentVariable", "GetEnvironmentStrings",
                             "SetCurrentDirectory"]},
 }
@@ -112,6 +115,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"runtime"
+	"syscall"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel"
@@ -126,6 +132,10 @@ func Chains(ctx context.Context, c prometheus.Collector, req *http.Request, f *o
 	_ = otel.GetTracerProvider().Tracer("x")     // want
 	stdlog.Printf("x")                           // want
 	_ = f.Chdir()                                // want
+	time.Local = time.UTC                        // want
+	runtime.MemProfileRate = 0                   // want
+	_ = time.Now().In(time.Local)                // want
+	_ = os.NewFile(uintptr(syscall.Stdout), "x") // want
 }
 '''
 
@@ -163,6 +173,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -195,6 +206,14 @@ func Allowed(ctx context.Context, l *slog.Logger, reg prometheus.Registerer, c p
 	_, _ = debug.ReadBuildInfo()
 	_ = debug.Stack()
 	_ = runtime.NumCPU()
+	_, _ = runtime.MemProfile(nil, false)
+	runtime.LockOSThread()
+	runtime.UnlockOSThread()
+	_, _ = os.Getwd()
+	_ = os.Getpid()
+	loc, _ := time.LoadLocation("Europe/Moscow")
+	_ = time.Date(2026, 10, 25, 0, 0, 0, 0, loc).In(time.UTC)
+	_ = time.FixedZone("MSK", 3*60*60)
 	_ = runtime.GOMAXPROCS(0) //nolint:forbidigo // read-only default of a pool size the service may override
 	file, _ := os.Open("x")
 	_ = file.Name()
