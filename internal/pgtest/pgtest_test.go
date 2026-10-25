@@ -2,6 +2,7 @@ package pgtest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -50,12 +51,74 @@ func TestUnitValidate(t *testing.T) {
 	}
 }
 
+func env(vars map[string]string) func(string) string {
+	return func(k string) string { return vars[k] }
+}
+
 func TestUnitExplicitServerDoesNotStartContainer(t *testing.T) {
-	t.Setenv("TEST_DATABASE_URL", "explicit-test-server")
-	t.Setenv("TEST_POSTGRES_IMAGE", "must-not-be-pulled")
-	dsn, err := server()
+	start := func(context.Context, string) (container, error) {
+		t.Fatal("a container was started despite TEST_DATABASE_URL")
+		return nil, nil
+	}
+	dsn, err := selectServer(env(map[string]string{"TEST_DATABASE_URL": "explicit-test-server"}), start)
 	if err != nil || dsn != "explicit-test-server" {
 		t.Fatalf("explicit server selection: %q %v", dsn, err)
+	}
+}
+
+func TestUnitContainerUsesImageOverrideAndDefault(t *testing.T) {
+	for _, c := range []struct{ override, want string }{{"", DefaultImage}, {"postgres:18.1", "postgres:18.1"}} {
+		var got string
+		start := func(_ context.Context, image string) (container, error) {
+			got = image
+			return fakeContainer{dsn: "container-dsn"}, nil
+		}
+		dsn, err := selectServer(env(map[string]string{"TEST_POSTGRES_IMAGE": c.override}), start)
+		if err != nil || dsn != "container-dsn" || got != c.want {
+			t.Fatalf("override %q: dsn %q, image %q, err %v", c.override, dsn, got, err)
+		}
+	}
+}
+
+// secretDSN stands for a connection string with a password inside a dependency error.
+const secretDSN = "postgres://postgres:s3cret-password@10.0.0.7:5432/postgres"
+
+type fakeContainer struct {
+	dsn string
+	err error
+}
+
+func (c fakeContainer) ConnectionString(context.Context, ...string) (string, error) {
+	return c.dsn, c.err
+}
+
+func TestUnitServerFailuresDoNotLeakTheCause(t *testing.T) {
+	cause := errors.New("dial " + secretDSN + ": connection refused")
+	cases := []struct {
+		name  string
+		start starter
+		want  string
+	}{
+		{"container does not start", func(context.Context, string) (container, error) {
+			return nil, cause
+		}, "start test PostgreSQL failed"},
+		{"connection string fails", func(context.Context, string) (container, error) {
+			return fakeContainer{err: cause}, nil
+		}, "read test PostgreSQL connection failed"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dsn, err := selectServer(env(nil), c.start)
+			if err == nil || dsn != "" {
+				t.Fatalf("dsn %q, err %v, want a failure", dsn, err)
+			}
+			if err.Error() != c.want {
+				t.Fatalf("error %q, want %q", err, c.want)
+			}
+			if strings.Contains(err.Error(), "s3cret-password") || strings.Contains(err.Error(), "10.0.0.7") || errors.Is(err, cause) {
+				t.Fatalf("error %q leaks or wraps the cause", err)
+			}
+		})
 	}
 }
 

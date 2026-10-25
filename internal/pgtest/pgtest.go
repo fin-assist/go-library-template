@@ -52,26 +52,46 @@ func DSN(t testing.TB) string {
 	return migratetest.DSN(t, serverDSN)
 }
 
-func server() (string, error) {
-	if dsn := os.Getenv("TEST_DATABASE_URL"); dsn != "" {
-		return dsn, nil
-	}
-	img := os.Getenv("TEST_POSTGRES_IMAGE")
-	if img == "" {
-		img = DefaultImage
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	c, err := tcpostgres.Run(ctx, img,
+func server() (string, error) { return selectServer(os.Getenv, runContainer) }
+
+// container is the part of the test container the server selection reads.
+type container interface {
+	ConnectionString(ctx context.Context, args ...string) (string, error)
+}
+
+// starter starts a PostgreSQL container of image.
+type starter func(ctx context.Context, image string) (container, error)
+
+func runContainer(ctx context.Context, image string) (container, error) {
+	c, err := tcpostgres.Run(ctx, image,
 		tcpostgres.WithDatabase("postgres"),
 		tcpostgres.WithUsername("postgres"),
 		tcpostgres.WithPassword("postgres"),
 		tcpostgres.BasicWaitStrategies(),
 	)
 	if err != nil {
-		return "", errors.New("start test PostgreSQL failed")
+		return nil, err
 	}
 	// The container lives until the test binary exits; Ryuk removes it.
+	return c, nil
+}
+
+// selectServer returns the admin DSN of the test server. Failure messages are fixed:
+// the causes from testcontainers or the driver can carry connection strings and are dropped.
+func selectServer(getenv func(string) string, start starter) (string, error) {
+	if dsn := getenv("TEST_DATABASE_URL"); dsn != "" {
+		return dsn, nil
+	}
+	img := getenv("TEST_POSTGRES_IMAGE")
+	if img == "" {
+		img = DefaultImage
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	c, err := start(ctx, img)
+	if err != nil {
+		return "", errors.New("start test PostgreSQL failed")
+	}
 	dsn, err := c.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		return "", errors.New("read test PostgreSQL connection failed")
