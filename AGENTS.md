@@ -98,16 +98,24 @@ The same priorities and rules as the services (`AGENTS.md` of `fin-assist/go-ser
   `DefaultRegisterer`/`DefaultGatherer`, `promauto.New*`, `promhttp.Handler`), default HTTP and OpenTelemetry
   globals (`http.DefaultClient`, `http.Get`, `http.Handle`, `otel.Get*`/`Set*`/`Tracer`/`Meter`/`Handle`,
   `otel/log/global`), `os/signal` and the environment (`os.Getenv` and the rest of the family, `os.Args`,
-  `os.User*Dir`, `syscall` and `golang.org/x/sys/unix|windows` env calls, Win32 included). `depguard` rejects even a
+  `os.User*Dir`, `syscall` and `golang.org/x/sys/unix|windows` env calls, Win32 included). By the owner's decision it
+  also rejects package-level `flag` functions and `flag.CommandLine` (a passed `*flag.FlagSet` from `flag.NewFlagSet`
+  stays allowed), `os.Stdout`/`os.Stderr`/`os.Stdin` (take an `io.Writer`/`io.Reader`), `runtime/debug.Set*`,
+  `runtime.GOMAXPROCS` and changing the working directory (`os.Chdir`, `syscall`/`x/sys` `Chdir`/`Fchdir`/
+  `SetCurrentDirectory`). `os.TempDir`, `os.CreateTemp` and `os.MkdirTemp` are rejected entirely: with an empty `dir`
+  they use the process-wide temp directory and lint cannot tell an empty argument from a passed one, so a library
+  takes the directory from the service and creates files in it (`os.OpenFile`, `os.Mkdir`); a deliberate
+  `CreateTemp(dir, …)` with a validated non-empty `dir` from the caller carries a `//nolint:forbidigo` with that
+  reason. `depguard` rejects even a
   blank import of `expvar`, `net/http/pprof` and `golang.org/x/net/trace` (handlers on `http.DefaultServeMux` in
-  `init`), `google.golang.org/grpc/grpclog/glogger` (replaces the gRPC logger in `init`), `github.com/golang/glog` and
-  `k8s.io/klog`. Injected forms stay allowed: `promauto.With(reg)`, `promhttp.HandlerFor`,
+  `init`), `google.golang.org/grpc/grpclog/glogger` (replaces the gRPC logger in `init`), `github.com/golang/glog`,
+  `k8s.io/klog`, `go.uber.org/automaxprocs` and `github.com/KimMachineGun/automemlimit` (runtime tuning in `init`). Injected forms stay allowed: `promauto.With(reg)`, `promhttp.HandlerFor`,
   `InstrumentMetricHandler(reg, …)`, `grpclog.LoggerV2` and `NewLoggerV2*` for an adapter the service installs,
   methods of a passed `*slog.Logger`, `Registerer`, `*http.Client`, `TracerProvider` or `MeterProvider`.
   `scripts/test_lint_policy.py` runs the pinned linter (version from `Makefile`, equal to `ci.yml`) on a hermetic probe
   module with pinned dependencies, for linux and windows: every forbidden and allowed form, chains such as
   `prometheus.DefaultRegisterer.MustRegister(c)` or `log.Default().Printf` and an aliased import are reported by their
-  first identifier. `flag`, `os.Stdout`/`os.Stderr` and `os.TempDir` await the owner's decision.
+  first identifier.
   Lint cannot see options: a library always passes the providers explicitly (`otelhttp`/`otelgrpc` with
   `WithTracerProvider`/`WithMeterProvider`; without them they take the global ones). grpc-go itself imports
   `golang.org/x/net/trace` unless built with the `grpcnotrace` tag; that is the service's build decision. The probe's

@@ -40,7 +40,7 @@ def module_version(module):
 # The probe is hermetic: every module it compiles is pinned, so an upstream release cannot break CI.
 # Versions present in go.mod follow it (Renovate updates them there). Renovate does not read the
 # constants below: they are raised by hand in a reviewed PR, when the libraries or services move to a
-# new prometheus/grpc/otel/klog release, or when the probe needs an API that only a newer release has.
+# new prometheus/grpc/otel/klog/automaxprocs/automemlimit release, or when the probe needs an API that only a newer release has.
 GO_VERSION = re.search(r"^go (\S+)$", GO_MOD, re.M)[1]
 PINNED = {
     "github.com/prometheus/client_golang": "v1.23.2",
@@ -49,6 +49,8 @@ PINNED = {
     "go.opentelemetry.io/otel/log": "v0.20.0",  # the release paired with otel v1.44.0
     "k8s.io/klog": "v1.0.0",
     "k8s.io/klog/v2": "v2.130.1",
+    "go.uber.org/automaxprocs": "v1.6.0",
+    "github.com/KimMachineGun/automemlimit": "v1.0.1",
     "go.opentelemetry.io/otel/metric": module_version("go.opentelemetry.io/otel/metric"),
     "go.opentelemetry.io/otel/trace": module_version("go.opentelemetry.io/otel/trace"),
     "golang.org/x/sys": module_version("golang.org/x/sys"),
@@ -80,14 +82,25 @@ FORBIDDEN = {
     "go.opentelemetry.io/otel/log/global": ["GetLoggerProvider", "SetLoggerProvider", "Logger"],
     "os/signal": ["Notify", "NotifyContext", "Ignore", "Reset", "Stop"],
     "os": ["Getenv", "LookupEnv", "Environ", "ExpandEnv", "Setenv", "Unsetenv", "Clearenv", "Args",
-           "UserHomeDir", "UserConfigDir", "UserCacheDir"],
-    "syscall": ["Getenv", "Environ", "Setenv", "Unsetenv", "Clearenv"],
+           "UserHomeDir", "UserConfigDir", "UserCacheDir", "Stdout", "Stderr", "Stdin", "TempDir",
+           "CreateTemp", "MkdirTemp", "Chdir"],
+    "syscall": ["Getenv", "Environ", "Setenv", "Unsetenv", "Clearenv", "Chdir"],
+    "flag": ["Arg", "Args", "Bool", "BoolFunc", "BoolVar", "CommandLine", "Duration", "DurationVar", "Float64",
+             "Float64Var", "Func", "Int", "Int64", "Int64Var", "IntVar", "Lookup", "NArg", "NFlag", "Parse",
+             "Parsed", "PrintDefaults", "Set", "String", "StringVar", "TextVar", "Uint", "Uint64", "Uint64Var",
+             "UintVar", "Usage", "Var", "Visit", "VisitAll"],
+    "runtime/debug": ["SetCrashOutput", "SetGCPercent", "SetMaxStack", "SetMaxThreads", "SetMemoryLimit",
+                      "SetPanicOnFault", "SetTraceback"],
+    "runtime": ["GOMAXPROCS"],
 }
 PLATFORM = {
-    "unix": {"golang.org/x/sys/unix": ["Getenv", "Environ", "Setenv", "Unsetenv", "Clearenv"]},
+    "unix": {"golang.org/x/sys/unix": ["Getenv", "Environ", "Setenv", "Unsetenv", "Clearenv", "Chdir", "Fchdir"],
+             "syscall": ["Fchdir"]},
     "windows": {"golang.org/x/sys/windows": ["Getenv", "Environ", "Setenv", "Unsetenv", "Clearenv",
-                                             "GetEnvironmentVariable", "SetEnvironmentVariable"],
-                "syscall": ["GetEnvironmentVariable", "SetEnvironmentVariable", "GetEnvironmentStrings"]},
+                                             "GetEnvironmentVariable", "SetEnvironmentVariable", "Chdir",
+                                             "SetCurrentDirectory"],
+                "syscall": ["GetEnvironmentVariable", "SetEnvironmentVariable", "GetEnvironmentStrings",
+                            "SetCurrentDirectory"]},
 }
 
 # Chains and an aliased import: each marked line must be reported by its first identifier.
@@ -119,7 +132,9 @@ BLANK = '''package probe
 
 import (
 	_ "expvar"                                 // want
+	_ "github.com/KimMachineGun/automemlimit"  // want
 	_ "github.com/golang/glog"                 // want
+	_ "go.uber.org/automaxprocs"               // want
 	_ "golang.org/x/net/trace"                 // want
 	_ "google.golang.org/grpc/grpclog/glogger" // want
 	_ "k8s.io/klog"                            // want
@@ -136,12 +151,16 @@ ALLOWED = '''package probe
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
+	"runtime/debug"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -164,6 +183,16 @@ func Allowed(ctx context.Context, l *slog.Logger, reg prometheus.Registerer, c p
 	client *http.Client, w io.Writer, tp trace.TracerProvider, mp metric.MeterProvider) {
 	_ = tp.Tracer("x")
 	_ = mp.Meter("x")
+	set := flag.NewFlagSet("library", flag.ContinueOnError)
+	set.SetOutput(w)
+	_ = set.String("name", "", "usage")
+	_ = set.Parse(nil)
+	_, _ = flag.UnquoteUsage(set.Lookup("name"))
+	_, _ = os.OpenFile(filepath.Join("dir", "file"), os.O_RDWR|os.O_CREATE, 0o600)
+	_ = os.Mkdir(filepath.Join("dir", "sub"), 0o700)
+	_, _ = debug.ReadBuildInfo()
+	_ = debug.Stack()
+	_ = runtime.NumCPU()
 	l.InfoContext(ctx, "x")
 	l.Info("x")
 	slog.New(slog.NewTextHandler(w, nil)).ErrorContext(ctx, "x", slog.String("k", "v"))

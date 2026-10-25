@@ -71,6 +71,32 @@ linters:
         - pattern: ^os\.(Getenv|LookupEnv|Environ|ExpandEnv|Setenv|Unsetenv|Clearenv|Args|UserHomeDir|UserConfigDir|UserCacheDir)$
           pkg: ^os$
           msg: a library takes its settings from the service, not from the environment
+        # Owner decision (FIN-294): flags, standard streams, the temp directory, runtime tuning and the
+        # working directory belong to the service; a library takes them as parameters.
+        - pattern: ^flag\.(Arg|Args|Bool|BoolFunc|BoolVar|CommandLine|Duration|DurationVar|Float64|Float64Var|Func|Int|Int64|Int64Var|IntVar|Lookup|NArg|NFlag|Parse|Parsed|PrintDefaults|Set|String|StringVar|TextVar|Uint|Uint64|Uint64Var|UintVar|Usage|Var|Visit|VisitAll)$
+          pkg: ^flag$
+          msg: the service parses flags; take a *flag.FlagSet (flag.NewFlagSet) or the values
+        - pattern: ^os\.(Stdout|Stderr|Stdin)$
+          pkg: ^os$
+          msg: take an io.Writer / io.Reader or a *slog.Logger from the service
+        - pattern: ^os\.(TempDir|CreateTemp|MkdirTemp)$
+          pkg: ^os$
+          msg: take the directory from the service; lint cannot tell an empty dir from a passed one (AGENTS.md)
+        - pattern: ^os\.Chdir$
+          pkg: ^os$
+          msg: the working directory is process-wide; use paths relative to a directory the service passes
+        - pattern: ^debug\.Set.+$
+          pkg: ^runtime/debug$
+          msg: runtime tuning is process-wide and belongs to the service's main
+        - pattern: ^runtime\.GOMAXPROCS$
+          pkg: ^runtime$
+          msg: runtime tuning is process-wide and belongs to the service's main
+        - pattern: ^syscall\.(Chdir|Fchdir|SetCurrentDirectory)$
+          pkg: ^syscall$
+          msg: the working directory is process-wide; use paths relative to a directory the service passes
+        - pattern: ^(unix|windows)\.(Chdir|Fchdir|SetCurrentDirectory)$
+          pkg: ^golang\.org/x/sys/(unix|windows)$
+          msg: the working directory is process-wide; use paths relative to a directory the service passes
         - pattern: ^syscall\.(Getenv|Environ|Setenv|Unsetenv|Clearenv|GetEnvironmentVariable|SetEnvironmentVariable|GetEnvironmentStrings)$
           pkg: ^syscall$
           msg: a library takes its settings from the service, not from the environment
@@ -97,6 +123,11 @@ linters:
               desc: global logger with flags and files in os.TempDir; use log/slog
             - pkg: k8s.io/klog
               desc: global logger with flags; use log/slog
+            # Change GOMAXPROCS and the memory limit in init (runtime tuning belongs to the service's main).
+            - pkg: go.uber.org/automaxprocs
+              desc: sets GOMAXPROCS in init and logs through the standard logger
+            - pkg: github.com/KimMachineGun/automemlimit
+              desc: sets the runtime memory limit in init
             - pkg: github.com/gin-gonic/gin
               desc: no web frameworks, use net/http
             - pkg: github.com/labstack/echo
