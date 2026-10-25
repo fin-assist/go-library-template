@@ -59,6 +59,8 @@ the PR with why it is needed: every service that imports the library inherits it
   point the tests at it: `TEST_DATABASE_URL='postgres://postgres@localhost:<port>/postgres?sslmode=disable' make test`.
   Without either, integration tests are skipped locally and fail in CI (`CI` set) — a skip is not a pass.
 - `make lint` and `make api` run the pinned tools through `go run`; no separate install.
+- The script tests need PyYAML (`python3-yaml`); `scripts/test_lint_policy.py` also builds the pinned golangci-lint and
+  downloads the probe's modules (prometheus, grpc, otel, x/sys), so it needs the module proxy.
 - `make cover` needs the `covdata` tool, which a toolchain downloaded by `GOTOOLCHAIN` lacks ("no such tool
   covdata"): build it once with `T=$(go env GOTOOLDIR); chmod u+w "$T"; go build -o "$T/covdata" cmd/covdata`.
 - Every test or lint run gets a timeout (`timeout 600 make test` or the tool's own): a hung run blocks the session.
@@ -89,11 +91,16 @@ The same priorities and rules as the services (`AGENTS.md` of `fin-assist/go-ser
   (inside a transaction, on the primary, after the identity interceptor) and which errors come back.
 - **No process-wide state.** The service passes everything in: `*slog.Logger`, `prometheus.Registerer`, the clock
   (`func() time.Time`), settings in an options struct with documented defaults. No `init()` with side effects, no
-  package-level mutable variables, no reading the environment; `forbidigo` rejects outside tests the default
-  loggers (`slog.Default`, package-level `slog`/`log` calls, `log.Default`, `log.SetOutput`, …), the default
-  metrics registry (`prometheus.MustRegister`/`Register`, `prometheus.DefaultRegisterer`/`DefaultGatherer`,
-  `promauto.New*`; `promauto.With(reg)` is allowed) and the environment (`os.Getenv`, `os.LookupEnv`, `os.Environ`,
-  `os.ExpandEnv`, `os.Setenv`, `syscall.Getenv`, …); `scripts/test_lint_policy.py` keeps the list from shrinking.
+  package-level mutable variables, no reading the environment; `forbidigo` rejects outside tests and `internal/pgtest`
+  the default loggers (`fmt.Print*`, `print`, package-level `slog`/`log`, `log.Default`/`SetOutput`, `grpclog`), the
+  default metrics registry (`prometheus.MustRegister`/`Register`/`Unregister`/`DefaultRegisterer`/`DefaultGatherer`,
+  `promauto.New*`, `promhttp.Handler`, `expvar`), default HTTP and OpenTelemetry globals (`http.DefaultClient`,
+  `http.Get`, `http.Handle`, `otel.Set*`/`Get*`), `os/signal` and the environment (`os.Getenv` and the rest of the
+  family, `os.Args`, `os.User*Dir`, `syscall` and `golang.org/x/sys/unix|windows` env calls). Injected forms stay
+  allowed: `promauto.With(reg)`, `promhttp.HandlerFor`, `InstrumentMetricHandler(reg, …)`, methods of a passed
+  `*slog.Logger`, `Registerer` or `*http.Client`. `scripts/test_lint_policy.py` runs the pinned linter on a probe of
+  every forbidden and allowed form for linux and windows; chains like `prometheus.DefaultRegisterer.MustRegister(c)`
+  are caught by their first identifier. `flag`, `os.Stdout`/`os.Stderr` and `os.TempDir` await the owner's decision.
 - **The service owns the transaction.** A library that writes together with the effect (idempotency, outbox,
   tombstone) takes it through a consumer interface — `interface{ Tx(context.Context) (pgx.Tx, bool) }`, implemented
   by `postgres.DB` of the service template — and returns an error when there is none, instead of writing outside it.

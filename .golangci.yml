@@ -31,31 +31,50 @@ linters:
           msg: ErrorInfo is built only by finerr (grpc-api.md 5.2)
         - pattern: ^grpc\.Errorf$
           msg: build errors with finerr (grpc-api.md 5.2)
+        # A custom forbid list replaces forbidigo's default one: keep its print rules.
+        - pattern: ^(fmt\.Print(|f|ln)|print|println)$
+          msg: take a *slog.Logger from the service
         # A library never reaches for process-wide state: the service passes the logger, the
-        # metrics registry and the settings in (AGENTS.md, «Writing code»).
-        - pattern: ^slog\.(Default|SetDefault|Debug|Info|Warn|Error|Log)(Context|Attrs)?$
+        # metrics registry, the HTTP client and the settings in (AGENTS.md, «Writing code»).
+        # scripts/test_lint_policy.py runs this linter on a probe of every forbidden and allowed form.
+        - pattern: ^slog\.(Default|SetDefault|SetLogLoggerLevel|Debug|DebugContext|Info|InfoContext|Warn|WarnContext|Error|ErrorContext|Log|LogAttrs)$
           pkg: ^log/slog$
           msg: take a *slog.Logger from the service
-        - pattern: ^slog\.SetLogLoggerLevel$
-          pkg: ^log/slog$
-          msg: take a *slog.Logger from the service
-        - pattern: ^log\.(Print|Fatal|Panic)(f|ln)?$
+        - pattern: ^log\.(Print|Printf|Println|Fatal|Fatalf|Fatalln|Panic|Panicf|Panicln|Default|Writer|SetOutput|SetFlags|SetPrefix|Flags|Prefix|Output)$
           pkg: ^log$
           msg: take a *slog.Logger from the service
-        - pattern: ^log\.(Default|Writer|SetOutput|SetFlags|SetPrefix|Flags|Prefix|Output)$
-          pkg: ^log$
+        - pattern: ^grpclog\..+$
+          pkg: ^google\.golang\.org/grpc/grpclog$
           msg: take a *slog.Logger from the service
         - pattern: ^prometheus\.(MustRegister|Register|Unregister|DefaultRegisterer|DefaultGatherer)$
           pkg: ^github\.com/prometheus/client_golang/prometheus$
           msg: register metrics on the prometheus.Registerer the service passes in
-        - pattern: ^promauto\.New.*$
+        - pattern: ^promauto\.New.+$
           pkg: ^github\.com/prometheus/client_golang/prometheus/promauto$
           msg: register metrics on the prometheus.Registerer the service passes in
-        - pattern: ^os\.(Getenv|LookupEnv|Environ|ExpandEnv|Setenv|Unsetenv|Clearenv)$
+        - pattern: ^promhttp\.Handler$
+          pkg: ^github\.com/prometheus/client_golang/prometheus/promhttp$
+          msg: serve the registry the service passes in (promhttp.HandlerFor)
+        - pattern: ^expvar\..+$
+          pkg: ^expvar$
+          msg: expvar is a process-wide registry; export metrics through the service's registerer
+        - pattern: ^http\.(DefaultClient|DefaultTransport|DefaultServeMux|Handle|HandleFunc|Get|Head|Post|PostForm|ListenAndServe|ListenAndServeTLS)$
+          pkg: ^net/http$
+          msg: take the *http.Client or the handler from the service
+        - pattern: ^otel\.(Get|Set).+$
+          pkg: ^go\.opentelemetry\.io/otel$
+          msg: take the provider from the service
+        - pattern: ^signal\.(Notify|NotifyContext|Ignore|Reset|Stop)$
+          pkg: ^os/signal$
+          msg: signal handling belongs to the service's main
+        - pattern: ^os\.(Getenv|LookupEnv|Environ|ExpandEnv|Setenv|Unsetenv|Clearenv|Args|UserHomeDir|UserConfigDir|UserCacheDir)$
           pkg: ^os$
           msg: a library takes its settings from the service, not from the environment
         - pattern: ^syscall\.(Getenv|Environ|Setenv|Unsetenv|Clearenv)$
           pkg: ^syscall$
+          msg: a library takes its settings from the service, not from the environment
+        - pattern: ^(unix|windows)\.(Getenv|Environ|Setenv|Unsetenv|Clearenv)$
+          pkg: ^golang\.org/x/sys/(unix|windows)$
           msg: a library takes its settings from the service, not from the environment
     depguard:
       # No frameworks, ORMs, DI containers; the standard library first (AGENTS.md, «Principles»).
