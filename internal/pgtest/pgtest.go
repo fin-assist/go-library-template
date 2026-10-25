@@ -10,6 +10,7 @@ package pgtest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"sync"
@@ -76,8 +77,8 @@ func runContainer(ctx context.Context, image string) (container, error) {
 	return c, nil
 }
 
-// selectServer returns the admin DSN of the test server. Failure messages are fixed:
-// the causes from testcontainers or the driver can carry connection strings and are dropped.
+// selectServer returns the admin DSN of the test server. A failure to read the connection
+// string has a fixed message: its cause can carry the DSN.
 func selectServer(getenv func(string) string, start starter) (string, error) {
 	if dsn := getenv("TEST_DATABASE_URL"); dsn != "" {
 		return dsn, nil
@@ -90,7 +91,9 @@ func selectServer(getenv func(string) string, start starter) (string, error) {
 	defer cancel()
 	c, err := start(ctx, img)
 	if err != nil {
-		return "", errors.New("start test PostgreSQL failed")
+		// No DSN exists yet and the password is the fixed test one, so the cause (Docker
+		// down, image pull limit) is kept for diagnostics.
+		return "", fmt.Errorf("start test PostgreSQL %s: %w", img, err)
 	}
 	dsn, err := c.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {

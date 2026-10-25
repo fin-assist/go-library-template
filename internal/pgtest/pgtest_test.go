@@ -92,38 +92,34 @@ func (c fakeContainer) ConnectionString(context.Context, ...string) (string, err
 	return c.dsn, c.err
 }
 
-func TestUnitServerFailuresDoNotLeakTheCause(t *testing.T) {
-	cause := errors.New("dial " + secretDSN + ": connection refused")
-	cases := []struct {
-		name  string
-		start starter
-		want  string
-	}{
-		{"container does not start", func(context.Context, string) (container, error) {
-			return nil, cause
-		}, "start test PostgreSQL failed"},
-		{"connection string fails", func(context.Context, string) (container, error) {
-			return fakeContainer{err: cause}, nil
-		}, "read test PostgreSQL connection failed"},
+func TestUnitContainerStartFailureKeepsItsCause(t *testing.T) {
+	cause := errors.New("Cannot connect to the Docker daemon")
+	start := func(context.Context, string) (container, error) { return nil, cause }
+	dsn, err := selectServer(env(nil), start)
+	if dsn != "" || !errors.Is(err, cause) || !strings.Contains(err.Error(), DefaultImage) {
+		t.Fatalf("dsn %q, err %v, want the wrapped cause and the image", dsn, err)
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			dsn, err := selectServer(env(nil), c.start)
-			if err == nil || dsn != "" {
-				t.Fatalf("dsn %q, err %v, want a failure", dsn, err)
-			}
-			if err.Error() != c.want {
-				t.Fatalf("error %q, want %q", err, c.want)
-			}
-			if strings.Contains(err.Error(), "s3cret-password") || strings.Contains(err.Error(), "10.0.0.7") || errors.Is(err, cause) {
-				t.Fatalf("error %q leaks or wraps the cause", err)
-			}
-		})
+}
+
+func TestUnitConnectionStringFailureDoesNotLeakTheCause(t *testing.T) {
+	cause := errors.New("parse " + secretDSN + ": invalid port")
+	start := func(context.Context, string) (container, error) { return fakeContainer{err: cause}, nil }
+	dsn, err := selectServer(env(nil), start)
+	if err == nil || dsn != "" {
+		t.Fatalf("dsn %q, err %v, want a failure", dsn, err)
+	}
+	if err.Error() != "read test PostgreSQL connection failed" {
+		t.Fatalf("error %q, want the fixed message", err)
+	}
+	if strings.Contains(err.Error(), "s3cret-password") || strings.Contains(err.Error(), "10.0.0.7") || errors.Is(err, cause) {
+		t.Fatalf("error %q leaks or wraps the cause", err)
 	}
 }
 
 func TestUnitCheckUpDownUpRejectsInvalidFilesBeforeConnecting(t *testing.T) {
-	r := &recorder{TB: t}
+	// Reaching DSN would fail differently: a skip, a connection failure, or a registered
+	// database cleanup are all recorded as failures with their own message.
+	r := &recorder{TB: t, noDatabase: true}
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -212,15 +208,40 @@ type recorder struct {
 	testing.TB
 	failed bool
 	msg    string
+	// noDatabase records a skip or a database cleanup as a failure: the code under test
+	// must not reach a server.
+	noDatabase bool
 }
 
 func (r *recorder) Helper() {}
+
+func (r *recorder) Skip(args ...any) { r.fail("skipped: " + fmt.Sprint(args...)) }
+
+func (r *recorder) Skipf(format string, args ...any) {
+	r.fail("skipped: " + fmt.Sprintf(format, args...))
+}
+
+func (r *recorder) Cleanup(f func()) {
+	if r.noDatabase {
+		r.record("a test database was created")
+		f()
+		return
+	}
+	r.TB.Cleanup(f)
+}
 
 func (r *recorder) Fatal(args ...any) { r.fail(fmt.Sprint(args...)) }
 
 func (r *recorder) Fatalf(format string, args ...any) { r.fail(fmt.Sprintf(format, args...)) }
 
 func (r *recorder) fail(msg string) {
-	r.failed, r.msg = true, msg
+	r.record(msg)
 	runtime.Goexit()
+}
+
+// record keeps the first failure, so a later one cannot hide it.
+func (r *recorder) record(msg string) {
+	if !r.failed {
+		r.failed, r.msg = true, msg
+	}
 }
