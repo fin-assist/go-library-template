@@ -39,6 +39,9 @@ jobs:
         run: go vet ./...
       - name: Test names cover all selectors
         run: make test-names
+      # scripts/test_workflow_hardening.py parses workflows with PyYAML (preinstalled on ubuntu runners).
+      - name: Script dependencies
+        run: python3 -c 'import yaml' || { echo 'PyYAML is required for the script tests (python3-yaml).' >&2; exit 1; }
       - name: Test the scripts
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: CHANGELOG.md format

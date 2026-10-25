@@ -59,6 +59,8 @@ the PR with why it is needed: every service that imports the library inherits it
   point the tests at it: `TEST_DATABASE_URL='postgres://postgres@localhost:<port>/postgres?sslmode=disable' make test`.
   Without either, integration tests are skipped locally and fail in CI (`CI` set) — a skip is not a pass.
 - `make lint` and `make api` run the pinned tools through `go run`; no separate install.
+- The script tests need PyYAML (`python3-yaml`, or `pip install pyyaml`): `scripts/test_workflow_hardening.py` parses
+  the workflows with `yaml.safe_load` and fails without it.
 - `make cover` needs the `covdata` tool, which a toolchain downloaded by `GOTOOLCHAIN` lacks ("no such tool
   covdata"): build it once with `T=$(go env GOTOOLDIR); chmod u+w "$T"; go build -o "$T/covdata" cmd/covdata`.
 - Every test or lint run gets a timeout (`timeout 600 make test` or the tool's own): a hung run blocks the session.
@@ -172,7 +174,7 @@ on PRs the migration checks (existing files unchanged, squawk on new ones). Run 
 
 Workflows: every `actions/checkout` except `release.yml` and `claude.yml` sets `persist-credentials: false`, and a
 `run:` script reads branch names and event fields from `env:`, never from `${{ … }}` in its text (FIN-301,
-`scripts/test_workflow_hardening.py`).
+`scripts/test_workflow_hardening.py`, which checks the values decoded by PyYAML in `*.yml` and `*.yaml`).
 
 ### Independent coverage (FIN-243)
 
