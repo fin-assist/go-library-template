@@ -1,10 +1,11 @@
 # Изменения
 
-Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версии и выпуск — [docs/releasing.md](docs/releasing.md). Каждый PR, который меняет API или поведение библиотеки, добавляет строку в «Unreleased»; при выпуске раздел получает номер версии и дату.
+Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версии и выпуск — [docs/releasing.md](docs/releasing.md). Каждый PR библиотеки, включая документацию, тесты и CI, добавляет строку в «Unreleased»; при выпуске раздел получает номер версии и дату.
 
 ## [Unreleased]
 
 ### Изменено
 
 - FIN-247: только исходный пустой go-library-template сообщает N/A для coverage после обязательного успешного выполнения всех трёх наборов. При появлении production statements автоматически действуют прежние total80; новые библиотеки не наследуют исключение. Проверки suites, required go, защиты и Controller Renovate сохранены; runtime и публичный API не менялись.
+- FIN-307: правила `docs/releasing.md` и вступление CHANGELOG требуют строку в `[Unreleased]` от каждого PR, включая документацию, тесты и CI; заголовок PR выпуска — с ключом FIN; README перечисляет `local-prefixes`, `doc.go` и очистку `[Unreleased]` при создании библиотеки. Runtime и экспортируемый API не менялись.
 - FIN-243: независимые statements-профили unit/integration/API и обязательные пороги80 с готовым go-test-coverage v2.20.1; guards пустых/пропущенных наборов, исполнение Example/Fuzz и проверки публичного Go API. Только тестовый пакет internal/pgtest исключён из одинакового знаменателя всех трёх уровней; его тесты продолжают выполняться. Документирован эффект постоянно красного go на Renovate retry/close/quarantine и необходимость отдельного решения об операционной паузе. Runtime и экспортируемый API не менялись.
