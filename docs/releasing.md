@@ -55,6 +55,10 @@
 
 ## Миграции
 
+FIN-371: правила Squawk `prefer-bigint-over-int` и `prefer-bigint-over-smallint` выключены
+в `.squawk.toml`. Разрядность выбирается по предметному диапазону и ожидаемому росту таблицы.
+Существующие типы колонок и immutable-миграции не меняются; прежние inline ignore сохраняются.
+
 Миграции библиотеки — отдельный источник golang-migrate со своей таблицей версий `<библиотека>_schema_migrations` ([FIN-115](https://finassist.youtrack.cloud/issue/FIN-115), `docs/migrations.md` в `fin-assist/go-service-template`). Сервис применяет их командой `migrate up` до своих.
 
 - Выпущенный файл миграции не меняется: он уже применён в базах сервисов. Изменение — новым файлом (CI запрещает правку и удаление существующих).

@@ -50,6 +50,8 @@ gorelease), `internal/pgtest.DefaultImage` (PostgreSQL), `go-migrate` (test-only
 golang-migrate, grpc-go, protobuf, prometheus client_golang, testcontainers-go, squawk. A new dependency is named in
 the PR with why it is needed: every service that imports the library inherits it.
 
+Integer widths follow domain bounds and expected table growth. Squawk excludes both `prefer-bigint-over-int` and `prefer-bigint-over-smallint` in `.squawk.toml` (FIN-371); preserve historical ignores in immutable migrations.
+
 ## Build in an agent container
 
 - Go: the toolchain from `go.mod` is downloaded by `GOTOOLCHAIN=auto` (the default) on the first `go` command.
