@@ -13,11 +13,12 @@
 ## Новая библиотека из шаблона
 
 1. Создать репозиторий `fin-assist/go-<назначение>` из шаблона (GitHub → «Use this template») или влить шаблон в уже созданный.
-2. Заменить модуль и пакет: `go mod edit -module github.com/fin-assist/go-<назначение>`, пути импорта в Go-файлах, `package library` → `package <назначение>` в корневых файлах, `MigrationsName` в `migrations.go` и ожидаемое имя источника в `migration_api_test.go`, `formatters.settings.goimports.local-prefixes` в `.golangci.yml`, описание пакета в `doc.go`. Не заменять имя исходного репозитория в `scripts/check-suite.sh`: это ограничитель исключения N/A, который новая библиотека не наследует. При локальном клонировании сменить `origin` на новый репозиторий перед проверками; в Actions проверяется `GITHUB_REPOSITORY`.
+2. Заменить модуль и пакет: `go mod edit -module github.com/fin-assist/go-<назначение>`, пути импорта в Go-файлах, `package library` → `package <назначение>` в корневых файлах, `MigrationsName` в `migrations.go` и ожидаемое имя источника в `migration_api_test.go`, описание пакета в `doc.go`. Не заменять имя исходного репозитория в `scripts/check-suite.sh`: это ограничитель исключения N/A, который новая библиотека не наследует. При локальном клонировании сменить `origin` на новый репозиторий перед проверками; в Actions проверяется `GITHUB_REPOSITORY`.
+   Префикс goimports берётся из нового `go.mod` при генерации конфигурации; `.finassist-ci/generated/` вручную не править. Координаты общего CI `fin-assist/go-ci` в workflow, bootstrap и Renovate сохранить: глобальная замена имени шаблона недопустима. Профиль `library` и источник `.finassist-ci.json` не переименовывать вместе с модулем.
 3. Библиотека без таблиц удаляет `migrations.go`, `migrations_test.go`, `migration_api_test.go` и каталог `migrations/` и добавляет свой первый `TestAPI…` или исполняемый `Example…`: иначе набор API пуст и `scripts/check-suite.sh` его отклонит. Библиотека с таблицами убирает из `migration_api_test.go` проверку отсутствия SQL или заменяет этот тест usage-тестом своих миграций. Без gRPC — ничего не добавляет.
 4. Если библиотека строит ошибки для клиентов — `go get github.com/fin-assist/contracts/gen/go@<версия>` и конструкторы `finerr`.
 5. Переписать первый абзац этого README, раздел «Внедрение» ниже и первый абзац `AGENTS.md`. В `CHANGELOG.md` очистить `[Unreleased]` от записей шаблона и оставить одну строку с задачей создания библиотеки: иначе изменения шаблона попадут в заметки её первого выпуска.
-6. Секреты репозитория: `CLAUDE_CODE_OAUTH_TOKEN` (ревью `@claude`), `GO_MODULES_TOKEN` при приватных модулях. Claude GitHub App, Codex и Renovate стоят на организации.
+6. Секреты репозитория: `CLAUDE_CODE_OAUTH_TOKEN` (ревью `@claude`), `GO_MODULES_TOKEN` для приватных модулей используется только на доверенном push; PR секрет не получает, одного его добавления для приватных PR недостаточно — см. [доступ к модулям](docs/releasing.md#доступ-к-модулям). Claude GitHub App, Codex и Renovate стоят на организации.
 7. Первый выпуск — `v0.1.0` по [docs/releasing.md](docs/releasing.md).
 
 Перед первым запуском Renovate заменить **оба** `local>` ref в `renovate.json` на новый `fin-assist/<repo>`. GitHub template не копирует служебную ветку: создать собственную `renovate-policy` по [инструкции bootstrap](docs/renovate-policy.md#подготовка-и-включение), затем защитить её и настроить `controllerLogin`, обязательные checks и Environment `renovate-policy` с запуском только из `main` и доступ к organization secret `RENOVATE_POLICY_TOKEN` (выбранный владельцем вариант; новому репозиторию явно проверить доступность секрета). Проверить, что оба presets разрешаются из нового репозитория, а не из шаблона. До проверки оставить `RENOVATE_POLICY_ENABLED` выключенным; секреты, environments и branch protection из шаблона не наследуются.
@@ -58,7 +59,7 @@ CI (`.github/workflows/ci.yml`):
 | Job | Что |
 |---|---|
 | `go` | tidy/vet, race inventory; независимые unit/integration/API statements-профили и total80 (N/A только у исходного пустого шаблона); проверки скриптов/CHANGELOG; отчёты и artifacts |
-| `lint` | golangci-lint (`.golangci.yml`): `forbidigo` против обхода `finerr` и против ядра процессного состояния (глобальные логгер, метрики, HTTP, OpenTelemetry, окружение и процесс, `AGENTS.md`); `depguard` против фреймворков и пакетов с побочными эффектами init |
+| `lint` | golangci-lint (`.finassist-ci/generated/.golangci.yml`): `forbidigo` против обхода `finerr` и против ядра процессного состояния (глобальные логгер, метрики, HTTP, OpenTelemetry, окружение и процесс, `AGENTS.md`); `depguard` против фреймворков и пакетов с побочными эффектами init |
 | `api` | `gorelease`: изменения экспортируемого API против последнего тега и предлагаемая версия; на PR выпуска — проверка номера из `CHANGELOG.md` |
 | `migrations` (PR) | существующие миграции не изменены, squawk по новым |
 
@@ -92,3 +93,9 @@ FIN-247: только исходный `fin-assist/go-library-template` полу
 Проверка `api` устойчива к публикации тега во время CI: release-коммит сравнивается
 с предыдущим выпуском, удалённый тег проверяется по commit до и после `gorelease`.
 Подробности и границы исключения — [docs/releasing.md](docs/releasing.md#проверка-версии-в-ci-fin-264).
+
+## Общий Go CI и линтеры (FIN-372)
+
+`.finassist-ci.json` закрепляет отдельный общий источник `fin-assist/go-ci` полным SHA и объявляет профиль/исключения. CI вызывает reusable workflows того же SHA; `make lint`, `make fmt`, `make lint-config` и `make lint-migrations BASE_REF=origin/main` используют его через `scripts/common_ci.py`. Конфигурации создаются в игнорируемом `.finassist-ci/generated/`; локальные копии правил не редактируются. Первый локальный вызов требует доступ к GitHub. Обновление workflow и manifest pin приходит одним PR Renovate; откат возвращает прежние SHA вместе. [Источник, профили, обновление и откат](https://github.com/fin-assist/go-ci/blob/main/docs/shared-go-ci.md). Проверки тестов/coverage, PostgreSQL 18, race и совместимость сохраняются.
+
+Если новая ревизия общего источника меняет `common/bootstrap.py`, в том же PR обновить `scripts/common_ci.py` точными байтами из закреплённого SHA вместе со всеми pins. Byte-equality contract намеренно отклонит частичный переход; конфиги линтеров обратно не копируются. Откат возвращает прежние pins и соответствующую копию bootstrap вместе. Человеческий коммит для такой синхронизации переводит Renovate PR в ручное сопровождение: автомерж FIN-211 к нему больше не применяется.
