@@ -13,7 +13,8 @@
 ## Новая библиотека из шаблона
 
 1. Создать репозиторий `fin-assist/go-<назначение>` из шаблона (GitHub → «Use this template») или влить шаблон в уже созданный.
-2. Заменить модуль и пакет: `go mod edit -module github.com/fin-assist/go-<назначение>`, пути импорта в Go-файлах, `package library` → `package <назначение>` в корневых файлах, `MigrationsName` в `migrations.go` и ожидаемое имя источника в `migration_api_test.go`, `formatters.settings.goimports.local-prefixes` в `.golangci.yml`, описание пакета в `doc.go`. Не заменять имя исходного репозитория в `scripts/check-suite.sh`: это ограничитель исключения N/A, который новая библиотека не наследует. При локальном клонировании сменить `origin` на новый репозиторий перед проверками; в Actions проверяется `GITHUB_REPOSITORY`.
+2. Заменить модуль и пакет: `go mod edit -module github.com/fin-assist/go-<назначение>`, пути импорта в Go-файлах, `package library` → `package <назначение>` в корневых файлах, `MigrationsName` в `migrations.go` и ожидаемое имя источника в `migration_api_test.go`, описание пакета в `doc.go`. Не заменять имя исходного репозитория в `scripts/check-suite.sh`: это ограничитель исключения N/A, который новая библиотека не наследует. При локальном клонировании сменить `origin` на новый репозиторий перед проверками; в Actions проверяется `GITHUB_REPOSITORY`.
+   Префикс goimports берётся из нового `go.mod` при генерации конфигурации; `.finassist-ci/generated/` вручную не править. Координаты общего CI `fin-assist/go-service-template` в workflow, bootstrap и Renovate сохранить: глобальная замена имени шаблона недопустима. Профиль `library` и источник `.finassist-ci.json` не переименовывать вместе с модулем.
 3. Библиотека без таблиц удаляет `migrations.go`, `migrations_test.go`, `migration_api_test.go` и каталог `migrations/` и добавляет свой первый `TestAPI…` или исполняемый `Example…`: иначе набор API пуст и `scripts/check-suite.sh` его отклонит. Библиотека с таблицами убирает из `migration_api_test.go` проверку отсутствия SQL или заменяет этот тест usage-тестом своих миграций. Без gRPC — ничего не добавляет.
 4. Если библиотека строит ошибки для клиентов — `go get github.com/fin-assist/contracts/gen/go@<версия>` и конструкторы `finerr`.
 5. Переписать первый абзац этого README, раздел «Внедрение» ниже и первый абзац `AGENTS.md`. В `CHANGELOG.md` очистить `[Unreleased]` от записей шаблона и оставить одну строку с задачей создания библиотеки: иначе изменения шаблона попадут в заметки её первого выпуска.
@@ -58,7 +59,7 @@ CI (`.github/workflows/ci.yml`):
 | Job | Что |
 |---|---|
 | `go` | tidy/vet, race inventory; независимые unit/integration/API statements-профили и total80 (N/A только у исходного пустого шаблона); проверки скриптов/CHANGELOG; отчёты и artifacts |
-| `lint` | golangci-lint (`.golangci.yml`): `forbidigo` против обхода `finerr` и против ядра процессного состояния (глобальные логгер, метрики, HTTP, OpenTelemetry, окружение и процесс, `AGENTS.md`); `depguard` против фреймворков и пакетов с побочными эффектами init |
+| `lint` | golangci-lint (`.finassist-ci/generated/.golangci.yml`): `forbidigo` против обхода `finerr` и против ядра процессного состояния (глобальные логгер, метрики, HTTP, OpenTelemetry, окружение и процесс, `AGENTS.md`); `depguard` против фреймворков и пакетов с побочными эффектами init |
 | `api` | `gorelease`: изменения экспортируемого API против последнего тега и предлагаемая версия; на PR выпуска — проверка номера из `CHANGELOG.md` |
 | `migrations` (PR) | существующие миграции не изменены, squawk по новым |
 
@@ -92,3 +93,7 @@ FIN-247: только исходный `fin-assist/go-library-template` полу
 Проверка `api` устойчива к публикации тега во время CI: release-коммит сравнивается
 с предыдущим выпуском, удалённый тег проверяется по commit до и после `gorelease`.
 Подробности и границы исключения — [docs/releasing.md](docs/releasing.md#проверка-версии-в-ci-fin-264).
+
+## Общий Go CI и линтеры (FIN-372)
+
+`.finassist-ci.json` закрепляет общий источник полным SHA и объявляет профиль/исключения. CI вызывает reusable workflows того же SHA; `make lint`, `make fmt`, `make lint-config` и `make lint-migrations BASE_REF=origin/main` используют его через `scripts/common_ci.py`. Конфигурации создаются в игнорируемом `.finassist-ci/generated/`; локальные копии правил не редактируются. Первый локальный вызов требует доступ к GitHub. Обновление workflow и manifest pin приходит одним PR Renovate; откат возвращает прежние SHA вместе. [Источник, профили, обновление и откат](https://github.com/fin-assist/go-service-template/blob/main/docs/shared-go-ci.md). Проверки тестов/coverage, PostgreSQL 18, race и совместимость сохраняются.

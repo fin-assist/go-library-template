@@ -1,0 +1,6 @@
+{
+  "revision": "281832e5dddc0db221f57277e4c50f90c5f6c791",
+  "profile": "library",
+  "gosec_g115": false,
+  "squawk_smallint": false
+}
